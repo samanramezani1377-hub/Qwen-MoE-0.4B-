@@ -28,12 +28,31 @@ def main():
         print("ERROR: install datasets first",file=sys.stderr)
         return 2
     errors=[]
+    # Resume from an on-disk partial corpus whenever its manifest identifies the same source.
+    saved_rows=[]; saved_provenance=[]; saved_source=None
+    if a.output.exists() and a.manifest_output.exists():
+        try:
+            saved_manifest=json.loads(a.manifest_output.read_text(encoding="utf-8"))
+            candidate_rows=[clean(x) for x in a.output.read_text(encoding="utf-8").splitlines() if clean(x)]
+            if saved_manifest.get("dataset") in [x[0] for x in SOURCES] and candidate_rows:
+                saved_source=saved_manifest["dataset"]
+                saved_rows=candidate_rows[:a.count]
+                saved_provenance=saved_manifest.get("documents", [])[:len(saved_rows)]
+                print(f"Resuming corpus: {len(saved_rows)}/{a.count} saved samples from {saved_source}", flush=True)
+        except Exception as exc:
+            print(f"WARNING: ignoring invalid partial corpus checkpoint: {exc}",file=sys.stderr,flush=True)
     for source, license_name in SOURCES:
-        rows=[]; provenance=[]
+        if saved_source and source != saved_source:
+            continue
+        rows=list(saved_rows) if source==saved_source else []
+        provenance=list(saved_provenance) if source==saved_source else []
+        resume_after=max((int(x.get("row_index",-1)) for x in provenance),default=-1) if rows else -1
         try:
             print(f"Streaming real Persian corpus: {source}",flush=True)
             stream=load_dataset(source,split="train",streaming=True)
             for idx,row in enumerate(stream):
+                if idx <= resume_after:
+                    continue
                 if idx>=a.max_scan or len(rows)>=a.count:
                     break
                 if idx > 0 and idx % 500 == 0:
@@ -45,9 +64,33 @@ def main():
                 provenance.append({
                     "row_index":idx,
                     "url":str(row.get("url",""))[:1000],
-                    "doc_id":str(row.get("doc_id",row.get("id","")))[:200]
+                    "doc_id":str(row.get("doc_id",row.get("id","")))[:200
                 })
+                # Durable incremental checkpoint: a runtime interruption loses at most ~100 rows.
+                if len(rows) % 100 == 0:
+                    a.output.parent.mkdir(parents=True,exist_ok=True)
+                    a.manifest_output.parent.mkdir(parents=True,exist_ok=True)
+                    a.output.write_text("\\n".join(rows)+"\\n",encoding="utf-8")
+                    partial={"status":"partial","dataset":source,"split":"train","license":license_name,
+                        "streaming":True,"requested_samples":a.count,"collected_samples":len(rows),
+                        "min_chars":a.min_chars,"max_chars":a.max_chars,"max_scan":a.max_scan,
+                        "text_file":str(a.output),"collected_at_utc":datetime.now(timezone.utc).isoformat(),
+                        "fallback_used":source!=SOURCES[0][0],"documents":provenance,
+                        "note":"Partial resumable real corpus; preserve attribution and follow dataset license."}
+                    a.manifest_output.write_text(json.dumps(partial,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
             if len(rows)<a.count:
+                # Keep partial results so the next run can continue rather than restarting.
+                if rows:
+                    a.output.parent.mkdir(parents=True,exist_ok=True)
+                    a.manifest_output.parent.mkdir(parents=True,exist_ok=True)
+                    a.output.write_text("\\n".join(rows)+"\\n",encoding="utf-8")
+                    partial={"status":"partial","dataset":source,"split":"train","license":license_name,
+                        "streaming":True,"requested_samples":a.count,"collected_samples":len(rows),
+                        "min_chars":a.min_chars,"max_chars":a.max_chars,"max_scan":a.max_scan,
+                        "text_file":str(a.output),"collected_at_utc":datetime.now(timezone.utc).isoformat(),
+                        "fallback_used":source!=SOURCES[0][0],"documents":provenance,
+                        "note":"Partial resumable real corpus; preserve attribution and follow dataset license."}
+                    a.manifest_output.write_text(json.dumps(partial,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
                 raise RuntimeError(f"only {len(rows)}/{a.count} valid rows after scanning {a.max_scan}")
         except Exception as exc:
             msg=f"{source}: {type(exc).__name__}: {exc}"
