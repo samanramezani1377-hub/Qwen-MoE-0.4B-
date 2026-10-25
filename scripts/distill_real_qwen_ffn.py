@@ -144,7 +144,7 @@ def make_moe_from_ffn(ffn: nn.Module, num_experts: int, top_k: int) -> nn.Module
             self.router = nn.Linear(hidden, num_experts, bias=True, device=device, dtype=torch.float32)
             nn.init.normal_(self.router.weight, mean=0.0, std=0.01)
             nn.init.zeros_(self.router.bias)
-        def forward(self, x):
+        def forward(self, x, return_aux=False):
             shape = x.shape
             flat = x.reshape(-1, self.hidden_size)
             scores = self.router(flat.float())
@@ -158,7 +158,16 @@ def make_moe_from_ffn(ffn: nn.Module, num_experts: int, top_k: int) -> nn.Module
                     expert_in = flat.index_select(0, token_ids).to(dtype=expert_dtype)
                     expert_out = expert(expert_in).to(dtype=flat.dtype)
                     output = output.index_add(0, token_ids, expert_out * weights[token_ids, slots].unsqueeze(-1))
-            return output.reshape(shape)
+            output = output.reshape(shape)
+            if not return_aux:
+                return output
+            # Switch-style auxiliary loss: encourage probability mass to follow actual
+            # top-k load instead of allowing a few experts to monopolize token routing.
+            full_probs = torch.softmax(scores, dim=-1)
+            importance = full_probs.mean(dim=0)
+            load = F.one_hot(top_indices, num_classes=self.num_experts).float().mean(dim=(0, 1))
+            balance_loss = self.num_experts * torch.sum(importance * load)
+            return output, balance_loss, top_indices
     return TopKMoE()
 
 def main():
@@ -173,6 +182,10 @@ def main():
     p.add_argument("--epochs", type=int, default=3)
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--lr", type=float, default=1e-4)
+    p.add_argument("--balance-loss-weight", type=float, default=0.01,
+                   help="Weight for Switch-style router load-balancing auxiliary loss")
+    p.add_argument("--eval-fraction", type=float, default=0.1,
+                   help="Fraction of whole documents held out for evaluation")
     p.add_argument("--seed", type=int, default=17)
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     p.add_argument("--output", type=Path, default=Path("artifacts/layer0_top2.pt"))
@@ -182,8 +195,11 @@ def main():
     p.add_argument("--benchmark-repeats", type=int, default=12)
     p.add_argument("--trust-remote-code", action="store_true")
     a = p.parse_args()
-    if a.samples < 4 or a.epochs < 1 or a.batch_size < 1 or not 1 <= a.top_k <= a.num_experts:
-        p.error("Require samples>=4, epochs/batch-size>=1 and 1<=top-k<=num-experts")
+    if (a.samples < 4 or a.epochs < 1 or a.batch_size < 1
+            or not 1 <= a.top_k <= a.num_experts
+            or not 0.05 <= a.eval_fraction <= 0.5
+            or a.balance_loss_weight < 0):
+        p.error("Require samples>=4, epochs/batch-size>=1, 1<=top-k<=num-experts, eval-fraction in [0.05,0.5], and nonnegative balance-loss-weight")
     if a.benchmark_warmup < 0 or a.benchmark_repeats < 1:
         p.error("Require benchmark-warmup>=0 and benchmark-repeats>=1")
     if a.benchmark_output is None:
@@ -239,19 +255,29 @@ def main():
     progress("activation_capture_complete", batches=len(captures), samples=len(texts))
     if len(captures) != len(masks) or not captures:
         raise RuntimeError("FFN activation hook did not capture exactly one output per input batch.")
-    x_parts, y_parts, mask_parts = [], [], []
-    for (x, y), mask in zip(captures, masks):
-        x_parts.append(x.reshape(-1, x.shape[-1])); y_parts.append(y.reshape(-1, y.shape[-1]))
-        mask_parts.append(mask.reshape(-1))
-    x_all, y_all, valid = torch.cat(x_parts), torch.cat(y_parts), torch.cat(mask_parts)
-    x_all, y_all = x_all[valid], y_all[valid]
-    progress("activations_ready", tokens_captured=int(len(x_all)), hidden_size=int(x_all.shape[-1]))
-    del model, text_model
-    perm = torch.randperm(len(x_all), generator=torch.Generator().manual_seed(a.seed))
-    n_eval = max(1, int(0.1 * len(perm)))
-    eval_ids, train_ids = perm[:n_eval], perm[n_eval:]
-    x_train, y_train = x_all[train_ids], y_all[train_ids]
-    x_eval, y_eval = x_all[eval_ids], y_all[eval_ids]
+    # Preserve document boundaries: no tokens from one document may appear in both splits.
+    x_docs, y_docs = [], []
+    for (xb, yb), mask in zip(captures, masks):
+        for row in range(xb.shape[0]):
+            valid = mask[row]
+            if valid.any():
+                x_docs.append(xb[row][valid])
+                y_docs.append(yb[row][valid])
+    progress("activations_ready", documents_captured=len(x_docs),
+             tokens_captured=int(sum(len(v) for v in x_docs)),
+             hidden_size=int(x_docs[0].shape[-1]))
+    del captures, masks, model, text_model
+    doc_perm = torch.randperm(len(x_docs), generator=torch.Generator().manual_seed(a.seed))
+    n_eval_docs = max(1, int(a.eval_fraction * len(doc_perm)))
+    eval_doc_ids = doc_perm[:n_eval_docs].tolist()
+    train_doc_ids = doc_perm[n_eval_docs:].tolist()
+    if not train_doc_ids:
+        raise ValueError("Document-level split produced no training documents.")
+    x_train, y_train = torch.cat([x_docs[i] for i in train_doc_ids]), torch.cat([y_docs[i] for i in train_doc_ids])
+    x_eval, y_eval = torch.cat([x_docs[i] for i in eval_doc_ids]), torch.cat([y_docs[i] for i in eval_doc_ids])
+    del x_docs, y_docs
+    progress("document_split_complete", train_documents=len(train_doc_ids),
+             eval_documents=len(eval_doc_ids), train_tokens=len(x_train), eval_tokens=len(x_eval))
     moe = make_moe_from_ffn(ffn, a.num_experts, a.top_k).to(device)
     progress("moe_initialized", experts=a.num_experts, top_k=a.top_k,
              train_tokens=int(len(train_ids)), eval_tokens=int(len(eval_ids)))
@@ -268,7 +294,11 @@ def main():
         for batch_no, (xb, yb) in enumerate(loader, start=1):
             xb, yb = xb.to(device), yb.to(device)
             opt.zero_grad(set_to_none=True)
-            loss = F.mse_loss(moe(xb).float(), yb.float())
+            pred, balance_loss, _ = moe(xb, return_aux=True)
+            pred, target = pred.float(), yb.float()
+            mse = F.mse_loss(pred, target)
+            relative_mse = mse / target.square().mean().detach().clamp_min(1e-8)
+            loss = relative_mse + a.balance_loss_weight * balance_loss
             loss.backward(); torch.nn.utils.clip_grad_norm_(params, 1.0); opt.step()
             losses.append(loss.detach().item())
             train_step += 1
@@ -276,25 +306,33 @@ def main():
             steps_per_second = train_step / elapsed
             progress("training_progress", epoch=epoch + 1, total_epochs=a.epochs,
                      batch=batch_no, total_batches=len(loader), step=train_step, total_steps=total_steps,
-                     train_mse=round(losses[-1], 8), steps_per_second=round(steps_per_second, 3),
+                     train_objective=round(losses[-1], 8), steps_per_second=round(steps_per_second, 3),
                      eta_seconds=round((total_steps - train_step) / steps_per_second, 1))
         epoch_mse = sum(losses) / max(1, len(losses))
         progress("epoch_complete", epoch=epoch + 1, train_mse=epoch_mse)
-    moe.eval(); eval_losses = []
+    moe.eval(); eval_losses = []; eval_preds = []
     eval_batches = (len(x_eval) + a.batch_size - 1) // a.batch_size
     with torch.inference_mode():
         for batch_no, i in enumerate(range(0, len(x_eval), a.batch_size), start=1):
             pred = moe(x_eval[i:i+a.batch_size].to(device)).float().cpu()
-            eval_losses.append(F.mse_loss(pred, y_eval[i:i+a.batch_size]).item())
+            target = y_eval[i:i+a.batch_size]
+            eval_preds.append(pred)
+            eval_losses.append(F.mse_loss(pred, target).item())
             progress("evaluation_progress", batch=batch_no, total_batches=eval_batches,
                      eval_tokens_processed=min(i + a.batch_size, len(x_eval)), total_eval_tokens=len(x_eval))
-    eval_mse = sum(eval_losses) / max(1, len(eval_losses))
+    eval_pred = torch.cat(eval_preds)
+    eval_mse = F.mse_loss(eval_pred, y_eval).item()
+    eval_relative_error = (eval_pred - y_eval).norm().item() / y_eval.norm().clamp_min(1e-12).item()
+    eval_cosine = F.cosine_similarity(eval_pred.reshape(1, -1), y_eval.reshape(1, -1)).item()
     progress("benchmark_stage_started", purpose="original FFN versus trained top-2 MoE")
     benchmark = benchmark_ffn_vs_moe(ffn, moe, x_all, device,
                                      warmup=a.benchmark_warmup, repeats=a.benchmark_repeats)
     benchmark.update({
         "model_id": a.model, "layer": a.layer, "num_experts": a.num_experts, "top_k": a.top_k,
-        "eval_mse": eval_mse, "tokens_captured": int(len(x_all)),
+        "eval_mse": eval_mse, "eval_relative_error": eval_relative_error,
+        "eval_cosine_similarity": eval_cosine, "tokens_captured": int(len(x_train)+len(x_eval)),
+        "train_documents": len(train_doc_ids), "eval_documents": len(eval_doc_ids),
+        "balance_loss_weight": a.balance_loss_weight,
         "training_corpus": str(a.text_file), "benchmark_repeats": a.benchmark_repeats,
     })
     a.benchmark_output.parent.mkdir(parents=True, exist_ok=True)
@@ -302,16 +340,21 @@ def main():
                                    encoding="utf-8")
     progress("benchmark_saved", path=str(a.benchmark_output))
     a.output.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"model_id": a.model, "layer": a.layer, "hidden_size": int(x_all.shape[-1]),
-                "num_experts": a.num_experts, "top_k": a.top_k, "tokens_captured": len(x_all),
-                "train_tokens": len(train_ids), "eval_tokens": len(eval_ids), "eval_mse": eval_mse,
+    torch.save({"model_id": a.model, "layer": a.layer, "hidden_size": int(x_train.shape[-1]),
+                "num_experts": a.num_experts, "top_k": a.top_k, "tokens_captured": len(x_train)+len(x_eval),
+                "train_tokens": len(x_train), "eval_tokens": len(x_eval),
+                "train_documents": len(train_doc_ids), "eval_documents": len(eval_doc_ids),
+                "eval_mse": eval_mse, "eval_relative_error": eval_relative_error,
+                "eval_cosine_similarity": eval_cosine, "balance_loss_weight": a.balance_loss_weight,
                 "benchmark_output": str(a.benchmark_output),
                 "expert_route_assignments": benchmark.get("expert_route_assignments"),
                 "state_dict": {k: v.detach().cpu() for k, v in moe.state_dict().items()}}, a.output)
     progress("checkpoint_saved", path=str(a.output), eval_mse=eval_mse)
     print(json.dumps({"status": "ok", "model": a.model, "layer": a.layer, "device": str(device),
-                      "tokens_captured": len(x_all), "train_tokens": len(train_ids), "eval_tokens": len(eval_ids),
-                      "eval_mse": eval_mse, "checkpoint": str(a.output),
+                      "tokens_captured": len(x_train)+len(x_eval), "train_tokens": len(x_train), "eval_tokens": len(x_eval),
+                      "train_documents": len(train_doc_ids), "eval_documents": len(eval_doc_ids),
+                      "eval_mse": eval_mse, "eval_relative_error": eval_relative_error,
+                      "eval_cosine_similarity": eval_cosine, "checkpoint": str(a.output),
                       "benchmark": str(a.benchmark_output),
                       "note": "Single FFN layer prototype only; throughput is not full-model text generation speed."},
                      ensure_ascii=False, indent=2), flush=True)
