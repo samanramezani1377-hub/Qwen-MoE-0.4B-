@@ -23,7 +23,7 @@
 - [ممیزی عمیق تبدیل MoE و معیارهای پذیرش](docs/MOE_CONVERSION_AUDIT.md)
 - [بودجه و فرض‌های معماری](docs/ARCHITECTURE_BUDGET.md)
 - [راهنمای تقطیر فعال‌سازی FFN](docs/REAL_ACTIVATION_DISTILLATION.md)
-- [طرح ساخت مدل کامل](docs/FULL_MODEL_BUILD_PLAN.md)
+- [طرح ساخت مدل کامل](docs/FULL_MODEL_BUILD_PLAN.md)\n- [وضعیت پیاده‌سازی و محدودیت‌های باقی‌مانده](docs/IMPLEMENTATION_STATUS.md)
 
 ## معیار آماده‌بودن
 
