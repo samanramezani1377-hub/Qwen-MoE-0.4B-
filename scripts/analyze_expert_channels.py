@@ -52,8 +52,8 @@ def main():
     p.add_argument("--device", choices=("auto","cuda","cpu"), default="auto")
     p.add_argument("--seed", type=int, default=17)
     a=p.parse_args()
-    if a.num_experts < 2 or a.samples < 4 or a.max_length < 16:
-        p.error("Require num-experts>=2, samples>=4 and max-length>=16")
+    if a.num_experts < 2 or (a.num_experts & (a.num_experts - 1)) != 0 or a.samples < 4 or a.max_length < 16:
+        p.error("Require num-experts to be a power of two >=2, samples>=4 and max-length>=16")
     if a.device=="cuda" and not torch.cuda.is_available(): p.error("CUDA requested but unavailable")
     device=torch.device("cuda" if a.device=="cuda" or (a.device=="auto" and torch.cuda.is_available()) else "cpu")
     texts=[x.strip() for x in a.text_file.read_text(encoding="utf-8").splitlines() if x.strip()]
@@ -116,7 +116,7 @@ def main():
         if widths!={intermediate//a.num_experts}: raise RuntimeError(f"Layer {li}: expert groups are not balanced: {widths}")
         plan["layers"][str(li)]={"intermediate_size":intermediate,"hidden_size":hidden,
             "expert_width":intermediate//a.num_experts,"channel_groups":groups,
-            "gate_activation_mean_abs":float(torch.cat([sums[f"{li}:gate_proj"].abs().mean().view(1)]).item()),
+            "gate_activation_mean":float(sums[f"{li}:gate_proj"].mean().item()),
             "method_note":"groups are weight/activation-derived, balanced, and partition every original FFN channel exactly once"}
         print(json.dumps({"event":"layer_plan_complete","layer":li,"experts":a.num_experts,"expert_width":intermediate//a.num_experts}),flush=True)
     a.output.parent.mkdir(parents=True,exist_ok=True)
