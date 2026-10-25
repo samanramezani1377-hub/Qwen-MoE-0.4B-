@@ -320,7 +320,7 @@ jobs:
           See `persian_corpus.manifest.json` for dataset, license, sample count, and document provenance.
           The collector has no synthetic fallback: if both real sources fail, the training job fails.
 
-          `layer0_persian_top2_experiment.benchmark.json` records original-FFN versus trained top-2 MoE forward-only timing. `layer0_persian_validation_report.json` adds independent-document evaluation, zero/random-router baselines, relative error, process memory, and parameter accounting. `active_budget_sweep.json` compares 8/16/32/48 experts at top-2 using the same held-out Persian documents and a bounded training sample; it reports layer-output imitation metrics and estimated all-layer active parameter budgets. These are screening results, not end-to-end language quality or Android performance.
+          `layer0_persian_top2_experiment.benchmark.json` records original-FFN versus trained top-2 MoE forward-only timing. `layer0_persian_validation_report.json` adds independent-document evaluation, zero/random-router baselines, relative error, process memory, and parameter accounting. `active_budget_sweep.json` records the selected 32-expert top-2 configuration on a bounded training sample. `model_output_comparison.json` compares next-token logits, held-out text perplexity, and greedy continuations after replacing only one FFN layer. These are screening results, not a complete all-layer MoE quality test or Android performance.
           EOF
           cd hf-model
           git lfs track "experiments/*.pt"
