@@ -8,9 +8,7 @@
   "enable_gpu": true,
   "enable_tpu": false,
   "enable_internet": true,
-  "dataset_sources": [
-    "samanramezani/qwen-moe-training-source"
-  ],
+  "dataset_sources": [],
   "competition_sources": [],
   "kernel_sources": []
 }
