@@ -69,7 +69,7 @@
 اتصال Kaggle API از GitHub Actions تأیید شده است. نوت‌بوک مخصوص Kaggle در مسیر kaggle/combined_moe/ قرار دارد و خروجی‌ها را در /kaggle/working نگه می‌دارد؛ هیچ فایل قدیمی Google Drive را حذف نمی‌کند.
 
 1. به تب [Actions](https://github.com/samanramezani1377-hub/Qwen-MoE-0.4B-/actions/workflows/kaggle-combined-moe.yml) برو و **Run workflow** را بزن.
-2. در فیلد `kaggle_username` نام کاربری پروفایل Kaggle را وارد کن (نه ایمیل و نه توکن).
+2. نیازی به واردکردن نام کاربری نیست؛ workflow از قبل روی `samanramezani` تنظیم شده است.
 3. اجرای workflow نوت‌بوک را آپلود و اجرای Kaggle را شروع می‌کند؛ آموزش روی GPU Kaggle انجام می‌شود و به سهمیه/دسترس‌پذیری GPU وابسته است.
 4. خروجی‌های آموزش و ارزیابی در صفحهٔ Kernel در Kaggle، تب **Output** قابل دریافت‌اند.
 
