@@ -10,7 +10,13 @@
 
 - [Notebook آموزش همهٔ FFNها در Colab](notebooks/03_colab_full_layer_distillation.ipynb)
 - [اسکریپت تقطیر یک FFN](scripts/distill_real_qwen_ffn.py)
-- [اسکریپت تقطیر همهٔ FFNها](scripts/distill_all_qwen_ffn_layers.py)\n- [اعتبارسنجی checkpointهای ۲۴ لایه](scripts/validate_checkpoint_set.py)\n- [Runtime آزمایشی برای جایگزینی FFNها](scripts/moe_runtime.py)\n- [ارزیابی سرتاسری معلم در برابر MoE](scripts/evaluate_full_model.py)\n- [تولید متن با overlay آزمایشی](scripts/load_moe_model.py)\n- [بسته‌بندی checkpointها با hash و manifest](scripts/package_moe_adapter.py)\n- [بنچمارک سرتاسری تولید و حافظه](scripts/benchmark_moe_generation.py)
+- [اسکریپت تقطیر همهٔ FFNها](scripts/distill_all_qwen_ffn_layers.py)
+- [اعتبارسنجی checkpointهای ۲۴ لایه](scripts/validate_checkpoint_set.py)
+- [Runtime آزمایشی برای جایگزینی FFNها](scripts/moe_runtime.py)
+- [ارزیابی سرتاسری معلم در برابر MoE](scripts/evaluate_full_model.py)
+- [تولید متن با overlay آزمایشی](scripts/load_moe_model.py)
+- [بسته‌بندی checkpointها با hash و manifest](scripts/package_moe_adapter.py)
+- [بنچمارک سرتاسری تولید و حافظه](scripts/benchmark_moe_generation.py)
 
 ## معماری آزمایشی فعلی
 
@@ -23,7 +29,8 @@
 - [ممیزی عمیق تبدیل MoE و معیارهای پذیرش](docs/MOE_CONVERSION_AUDIT.md)
 - [بودجه و فرض‌های معماری](docs/ARCHITECTURE_BUDGET.md)
 - [راهنمای تقطیر فعال‌سازی FFN](docs/REAL_ACTIVATION_DISTILLATION.md)
-- [طرح ساخت مدل کامل](docs/FULL_MODEL_BUILD_PLAN.md)\n- [وضعیت پیاده‌سازی و محدودیت‌های باقی‌مانده](docs/IMPLEMENTATION_STATUS.md)
+- [طرح ساخت مدل کامل](docs/FULL_MODEL_BUILD_PLAN.md)
+- [وضعیت پیاده‌سازی و محدودیت‌های باقی‌مانده](docs/IMPLEMENTATION_STATUS.md)
 
 ## معیار آماده‌بودن
 
