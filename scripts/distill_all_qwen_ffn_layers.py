@@ -30,6 +30,60 @@ def log(event: str, **fields: Any) -> None:
     print(json.dumps({"event": event, "elapsed_seconds": round(time.monotonic()-START, 2), **fields},
                      ensure_ascii=False), flush=True)
 
+def pretrain_router_from_teacher(moe: nn.Module, x_train: torch.Tensor, y_train: torch.Tensor,
+                               device: torch.device, max_tokens: int, seed: int,
+                               batch_size: int = 32, lr: float = 5e-4) -> dict[str, Any]:
+    """Warm-start the router from greedy teacher-output reconstruction labels.
+
+    For each token, greedily selects experts whose summed shard outputs reduce squared
+    error to the dense FFN target. This is a heuristic initialization, not a quality
+    guarantee; normal joint distillation follows it.
+    """
+    if max_tokens <= 0:
+        return {"enabled": False, "reason": "router_pretrain_tokens=0"}
+    count = min(int(max_tokens), int(len(x_train)))
+    generator = torch.Generator().manual_seed(seed)
+    indices = torch.randperm(len(x_train), generator=generator)[:count]
+    router_opt = torch.optim.AdamW(moe.router.parameters(), lr=lr)
+    losses = []
+    usage = torch.zeros(moe.num_experts, dtype=torch.long)
+    moe.eval()
+    for start in range(0, count, batch_size):
+        chosen = indices[start:start+batch_size]
+        xb = x_train.index_select(0, chosen).to(device)
+        target = y_train.index_select(0, chosen).to(device).float()
+        expert_outputs = []
+        with torch.no_grad():
+            for expert in moe.experts:
+                expert_dtype = expert.gate_proj.weight.dtype
+                value = xb.to(dtype=expert_dtype)
+                expert_outputs.append(expert(value).float())
+        outputs = torch.stack(expert_outputs, dim=1)
+        residual = target.clone()
+        labels = []
+        for _ in range(moe.top_k):
+            # Greedy least-squares marginal gain for adding one expert output.
+            score = 2.0 * torch.einsum("bh,beh->be", residual, outputs) - outputs.square().sum(dim=-1)
+            if labels:
+                score.scatter_(1, torch.stack(labels, dim=1), float("-inf"))
+            selected = score.argmax(dim=-1)
+            labels.append(selected)
+            residual = residual - outputs[torch.arange(len(xb), device=device), selected]
+            usage += torch.bincount(selected.detach().cpu(), minlength=moe.num_experts)
+        targets = torch.stack(labels, dim=1)
+        logits = moe.router(xb.float())
+        loss = sum(F.cross_entropy(logits, targets[:, slot]) for slot in range(moe.top_k))
+        router_opt.zero_grad(set_to_none=True)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(moe.router.parameters(), 1.0)
+        router_opt.step()
+        losses.append(float(loss.detach()))
+    return {"enabled": True, "tokens": count, "mean_router_ce": sum(losses)/max(1,len(losses)),
+            "greedy_label_assignments": usage.tolist(),
+            "dead_experts_in_greedy_labels": int((usage == 0).sum().item()),
+            "method": "greedy marginal reduction in dense FFN reconstruction error; heuristic warm-start"}
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--model", default=MODEL_ID)
@@ -44,6 +98,8 @@ def main() -> int:
     p.add_argument("--train-batch-size", type=int, default=256, help="Captured token vectors per MoE optimizer step")
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--balance-loss-weight", type=float, default=0.01)
+    p.add_argument("--router-pretrain-tokens", type=int, default=2048,
+                   help="Tokens used to warm-start the router from greedy teacher-output reconstruction; 0 disables it")
     p.add_argument("--eval-fraction", type=float, default=0.1,
                    help="Fraction of whole documents held out for evaluation")
     p.add_argument("--seed", type=int, default=17)
@@ -55,6 +111,8 @@ def main() -> int:
     if (a.epochs < 1 or a.batch_size < 1 or a.train_batch_size < 1
             or not 0.05 <= a.eval_fraction <= 0.5 or a.balance_loss_weight < 0):
         p.error("epochs/batch sizes must be positive, eval-fraction in [0.05,0.5], and balance-loss-weight nonnegative")
+    if a.router_pretrain_tokens < 0:
+        p.error("router-pretrain-tokens must be nonnegative")
     if not 1 <= a.top_k <= a.num_experts:
         p.error("Require 1 <= top-k <= num-experts")
     if a.device == "cuda" and not torch.cuda.is_available():
@@ -132,6 +190,10 @@ def main() -> int:
         log("document_split_complete", layer=idx, train_documents=len(train_doc_ids),
             eval_documents=len(eval_doc_ids), train_tokens=len(x_train), eval_tokens=len(x_eval))
         moe = make_moe_from_ffn(ffn, a.num_experts, a.top_k).to(device)
+        router_warmstart = pretrain_router_from_teacher(
+            moe, x_train, y_train, device, a.router_pretrain_tokens, a.seed + idx,
+            batch_size=min(32, a.train_batch_size), lr=max(a.lr, 5e-4))
+        log("router_warmstart_complete", layer=idx, **router_warmstart)
         params = [q for q in moe.parameters() if q.requires_grad]
         opt = torch.optim.AdamW(params, lr=a.lr)
         loader = DataLoader(TensorDataset(x_train, y_train), batch_size=a.train_batch_size, shuffle=True)
@@ -188,7 +250,8 @@ def main() -> int:
             "dead_experts_on_eval": int((route_counts == 0).sum().item()),
             "router_entropy_nats": route_entropy,
             "balance_loss_weight": a.balance_loss_weight,
-            "training_objective": "normalized FFN distillation loss plus Switch-style router load balancing",
+            "router_warmstart": router_warmstart,
+            "training_objective": "greedy teacher-informed router warm-start, then normalized FFN distillation plus load balancing",
             "state_dict": {k: v.detach().cpu() for k, v in moe.state_dict().items()},
         }, out)
         log("layer_complete", layer=idx, eval_mse=eval_mse,
@@ -208,7 +271,8 @@ def main() -> int:
         "num_experts": a.num_experts, "top_k": a.top_k, "epochs": a.epochs,
         "total_documents": len(texts), "train_documents": len(train_doc_ids),
         "eval_documents": len(eval_doc_ids), "eval_fraction": a.eval_fraction,
-        "balance_loss_weight": a.balance_loss_weight, "max_length": a.max_length,
+        "balance_loss_weight": a.balance_loss_weight, "router_pretrain_tokens": a.router_pretrain_tokens,
+        "max_length": a.max_length,
         "checkpoint_count_present": len(present_checkpoints),
         "checkpoints": present_checkpoints,
         "important_limitation": "Per-layer checkpoints only. This script does not yet package a loadable full MoE Transformers model or export Android runtime files.",
