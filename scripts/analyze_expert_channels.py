@@ -10,6 +10,7 @@ import argparse, json, math, random
 from pathlib import Path
 from typing import Any
 import torch
+from huggingface_hub import HfApi
 from transformers import AutoModelForMultimodalLM, AutoTokenizer
 from distill_real_qwen_ffn import get_text_model
 
@@ -60,9 +61,13 @@ def main():
     if len(texts)<4: raise ValueError("Calibration text needs at least four non-empty documents")
     random.Random(a.seed).shuffle(texts); texts=texts[:a.samples]
     dtype=(torch.bfloat16 if device.type=="cuda" and torch.cuda.is_bf16_supported() else torch.float16) if device.type=="cuda" else torch.bfloat16
-    model=AutoModelForMultimodalLM.from_pretrained(a.model, torch_dtype=dtype, low_cpu_mem_usage=True).to(device).eval()
-    revision=getattr(model.config,"_commit_hash",None)
-    if not revision: raise RuntimeError("Cannot resolve immutable teacher revision; refusing an unpinned architecture plan")
+    # Resolve a concrete Hub commit before loading, rather than relying on config._commit_hash
+    # which can be absent with some multimodal AutoModel loaders.
+    revision=HfApi().model_info(a.model).sha
+    if not revision or len(revision) != 40:
+        raise RuntimeError(f"Cannot resolve immutable Hugging Face commit for {a.model}; got {revision!r}")
+    print(json.dumps({"event":"teacher_revision_resolved","model":a.model,"revision":revision}),flush=True)
+    model=AutoModelForMultimodalLM.from_pretrained(a.model, revision=revision, dtype=dtype, low_cpu_mem_usage=True).to(device).eval()
     tokenizer=AutoTokenizer.from_pretrained(a.model, revision=revision)
     text_model=get_text_model(model); layers=text_model.layers
     # Calibration activation summaries from actual gate/up outputs; mask padding positions.
