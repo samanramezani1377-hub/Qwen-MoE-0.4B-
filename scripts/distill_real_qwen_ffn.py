@@ -70,7 +70,9 @@ def make_moe_from_ffn(ffn: nn.Module, num_experts: int, top_k: int) -> nn.Module
             for i, expert in enumerate(self.experts):
                 token_ids, slots = torch.where(top_indices == i)
                 if token_ids.numel():
-                    expert_out = expert(flat.index_select(0, token_ids))
+                    expert_dtype = next(expert.parameters()).dtype
+                    expert_in = flat.index_select(0, token_ids).to(dtype=expert_dtype)
+                    expert_out = expert(expert_in).to(dtype=flat.dtype)
                     output = output.index_add(0, token_ids, expert_out * weights[token_ids, slots].unsqueeze(-1))
             return output.reshape(shape)
     return TopKMoE()
