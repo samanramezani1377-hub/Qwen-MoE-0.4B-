@@ -115,13 +115,15 @@ def main():
     vocab=getattr(cfg,"vocab_size",None)
     embedding=getattr(text_model,"embed_tokens",None)
     embedding_count=sum(q.numel() for q in embedding.parameters()) if embedding is not None else 0
+    num_layers=len(layers)
+    intermediate_size=int(ffn.gate_proj.weight.shape[0])
     body_total=sum(q.numel() for q in text_model.parameters())
     ffn_counts=[sum(q.numel() for q in m.parameters()) for m in mlps]
     dense_ffn_total=sum(ffn_counts)
     non_ffn_core=body_total-embedding_count-dense_ffn_total
     head_count=int(vocab)*hidden if vocab else None
     tied=getattr(cfg,"tie_word_embeddings",None)
-    del model, text_model
+    del model, text_model, layers, mlps
     # Bound the experiment so the variants are comparable and CPU cost is predictable.
     g=torch.Generator().manual_seed(20261025)
     if len(x_train)>a.max_train_token_vectors:
@@ -169,7 +171,7 @@ def main():
         q=quality(pred,y_eval)
         active_ffn=sum(c*a.top_k/e + (hidden*e+e) for c in ffn_counts)
         active_core=int(round(non_ffn_core+active_ffn))
-        all_moe_total=int(round(body_total+sum(hidden*e+e for _ in layers)))
+        all_moe_total=int(round(body_total+num_layers*(hidden*e+e)))
         bench=[]
         for n in sorted(set([1,min(32,len(x_eval))])):
             batch=x_eval[:n].to(device=device,dtype=ffn_dtype)
@@ -178,7 +180,7 @@ def main():
             bench.append({"token_vectors":n,"dense_ffn":base,"trained_moe":repl,
                 "throughput_ratio_moe_over_dense":round(repl["token_vectors_per_second"]/base["token_vectors_per_second"],4)
                     if base["token_vectors_per_second"] else None})
-        record={"num_experts":e,"top_k":a.top_k,"expert_intermediate_size":6144//e if 6144%e==0 else None,
+        record={"num_experts":e,"top_k":a.top_k,"expert_intermediate_size":intermediate_size//e if intermediate_size%e==0 else None,
             "status":"ok","train_token_vectors":len(x_train),"eval_token_vectors":len(x_eval),
             "epochs":a.epochs,"train_batch_size":a.train_batch_size,"training_steps":steps,
             "quality_vs_dense_teacher":q,"benchmark_single_ffn_only":bench,
