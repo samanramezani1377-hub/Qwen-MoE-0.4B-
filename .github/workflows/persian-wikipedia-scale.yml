@@ -17,6 +17,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Cache pip and Hugging Face downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface/hub
+            ~/.cache/huggingface/datasets
+          key: ubuntu-py311-qwen-moe-cache-v1
+          restore-keys: |
+            ubuntu-py311-qwen-moe-cache-
+
       - name: Install CPU dependencies
         run: |
           python -m pip install --upgrade pip
