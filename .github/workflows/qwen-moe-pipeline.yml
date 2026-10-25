@@ -8,7 +8,7 @@ on:
       - "docs/**"
       - "notebooks/**"
       - "README-project.md"
-      - ".github/workflows/**"
+      - ".github/workflows/qwen-moe-pipeline.yml"
   workflow_dispatch:
 
 permissions:
