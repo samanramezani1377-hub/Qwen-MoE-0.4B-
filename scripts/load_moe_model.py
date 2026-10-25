@@ -36,7 +36,7 @@ def main():
     with torch.inference_mode():
         output = model.generate(**inputs, max_new_tokens=a.max_new_tokens, do_sample=False,
                                 pad_token_id=tokenizer.eos_token_id)
-    print(json.dumps({"status":"generation_completed","patch_report":patch,
+    print(json.dumps({"status":"generation_completed","teacher_revision":revision,"patch_report":patch,
                       "prompt":a.prompt,"generated_text":tokenizer.decode(output[0],skip_special_tokens=True),
                       "warning":"Research runtime only; not a standalone AutoModel package or Android deployment."},
                      ensure_ascii=False,indent=2))
