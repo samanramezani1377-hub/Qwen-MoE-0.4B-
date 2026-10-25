@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile project scripts
-        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py scripts/collect_persian_corpus.py scripts/split_persian_corpus.py scripts/validate_moe_experiment.py scripts/sweep_moe_budgets.py scripts/evaluate_model_outputs.py scripts/distill_all_qwen_ffn_layers.py
+        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py scripts/collect_persian_corpus.py scripts/split_persian_corpus.py scripts/validate_moe_experiment.py scripts/sweep_moe_budgets.py scripts/evaluate_model_outputs.py scripts/distill_all_qwen_ffn_layers.py scripts/moe_runtime.py scripts/validate_checkpoint_set.py scripts/evaluate_full_model.py scripts/load_moe_model.py scripts/package_moe_adapter.py
 
   synthetic-moe:
     name: Synthetic MoE correctness
