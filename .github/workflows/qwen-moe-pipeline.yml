@@ -283,10 +283,16 @@ jobs:
     steps:
       - name: Checkout GitHub repository
         uses: actions/checkout@v4
-      - name: Configure Git
+      - name: Download trained Persian experiment artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: qwen-persian-ffn-experiment
+          path: downloaded-persian-artifact
+      - name: Configure Git and Git LFS
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install
       - name: Sync project source files to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -307,7 +313,17 @@ jobs:
             rm -f hf-model/README-project.md
           fi
           rm -f hf-model/سلام.txt
+          mkdir -p hf-model/experiments
+          cp downloaded-persian-artifact/artifacts/layer0_persian_top2_experiment.pt hf-model/experiments/layer0_persian_top2_experiment.pt
+          cat > hf-model/experiments/README.md <<'EOF'
+          # Experimental Persian FFN checkpoint
+
+          This is a **single-layer research experiment**, not a complete deployable Qwen MoE model.
+          The training run may use a tiny fallback Persian corpus if Persian Wikipedia collection is rate-limited.
+          Check the GitHub Actions run and artifact metadata before interpreting this checkpoint as trained on Wikipedia.
+          EOF
           cd hf-model
+          git lfs track "experiments/*.pt"
           git add -A
           if git diff --cached --quiet; then
             echo "No project changes to sync."
