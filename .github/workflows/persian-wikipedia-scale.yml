@@ -1,9 +1,7 @@
 name: Persian FFN scale-up (CPU)
 
 on:
-  push:
-    paths:
-      - ".github/workflows/persian-wikipedia-scale.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
