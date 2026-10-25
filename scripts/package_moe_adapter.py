@@ -60,14 +60,14 @@ def main():
         dst=target/src.name
         shutil.copy2(src,dst)
         manifest["checkpoint_files"].append({"name":dst.name,"size_bytes":dst.stat().st_size,"sha256":sha256(dst)})
-    for name in ("moe_runtime.py","load_moe_model.py","evaluate_full_model.py","validate_checkpoint_set.py"):
+    for name in ("moe_runtime.py","load_moe_model.py","evaluate_full_model.py","validate_checkpoint_set.py","benchmark_moe_generation.py"):
         shutil.copy2(Path(__file__).with_name(name),out/name)
     (out/"overlay_manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     (out/"README.md").write_text(
         "# Experimental Qwen MoE overlay\n\n"
         "Contains per-layer sparse FFN checkpoints and runtime/evaluation helpers. "
         "Does not contain base Qwen weights and is not a standalone Transformers model.\n\n"
-        f"- Base model: {a.model}\n- Revision: {a.model_revision}\n"
+        f"- Base model: {a.model}\n- Revision: {checkpoint_revision}\n"
         f"- Layers: {a.layers}\n- Experts/layer: {a.num_experts}\n- Top-k: {a.top_k}\n\n"
         "Validate before use. See overlay_manifest.json for checkpoint SHA-256 hashes and limitations. "
         "Use load_moe_model.py after installing compatible torch/transformers.\n",
