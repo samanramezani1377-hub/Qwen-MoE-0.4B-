@@ -29,16 +29,16 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          path = Path("kaggle/combined_moe/kernel-metadata.json")
-          data = json.loads(path.read_text(encoding="utf-8"))
+          metadata_path = Path("kaggle/combined_moe/kernel-metadata.json")
+          data = json.loads(metadata_path.read_text(encoding="utf-8"))
           data["id"] = "samanramezani/qwen-moe-combined-text-qwen-kd"
-          path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          metadata_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
           print("Prepared Kaggle kernel:", data["id"])
           notebook_path = Path("kaggle/combined_moe/qwen_moe_combined_text_qwen_kd.ipynb")
           notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
           for index, cell in enumerate(notebook.get("cells", [])):
               cell["id"] = f"cell-{index:04d}"
-          path.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+          notebook_path.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
           print(f"Normalized cell IDs in {notebook_path}")
           PY
 
