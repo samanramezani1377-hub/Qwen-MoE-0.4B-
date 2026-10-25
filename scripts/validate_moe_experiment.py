@@ -49,7 +49,7 @@ def main():
     p.add_argument("--model",default=MODEL_ID); p.add_argument("--checkpoint",type=Path,required=True)
     p.add_argument("--eval-text-file",type=Path,required=True); p.add_argument("--output",type=Path,required=True)
     p.add_argument("--layer",type=int,default=0); p.add_argument("--max-length",type=int,default=128)
-    p.add_argument("--batch-size",type=int,default=2); p.add_argument("--num-experts",type=int,default=8)
+    p.add_argument("--batch-size",type=int,default=2); p.add_argument("--num-experts",type=int,default=32)
     p.add_argument("--top-k",type=int,default=2); p.add_argument("--warmup",type=int,default=3)
     p.add_argument("--repeats",type=int,default=12); p.add_argument("--device",choices=("auto","cpu","cuda"),default="cpu")
     p.add_argument("--trust-remote-code",action="store_true"); a=p.parse_args()
