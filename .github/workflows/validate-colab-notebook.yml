@@ -53,7 +53,7 @@ jobs:
               "Qwen/Qwen3.5-2B",
               "capture_qwen_logits_for_chatgpt_data.py",
               "train_moe_chatgpt_qwen_kd.py",
-              "torch.cuda.is_available()",
+              "cuda.is_available",
               "google.colab",
           ]
           missing = [item for item in required if item not in text]
