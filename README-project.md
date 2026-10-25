@@ -41,3 +41,8 @@
 5. تبدیل INT4/INT8 و benchmark CPU/RAM/سرعت روی اندروید؛ هیچ آموزش یا محاسبهٔ پولی بدون اجازه اجرا نمی‌شود.
 
 تخمین خام حافظهٔ وزن‌های 2B: حدود 4GB در FP16، 2GB در INT8 و 1GB در INT4، پیش از سربار کوانتیزه‌سازی، runtime، activations و cache. جزئیات در `docs/ARCHITECTURE_BUDGET.md` و `docs/DECISIONS.md` است.
+
+
+## Validation after the first MoE distillation run
+
+The unified workflow splits whole Persian documents before tokenization and runs `scripts/validate_moe_experiment.py` against held-out documents. It records relative/normalized errors, zero-output and random-router baselines, repeated layer timing, process memory, and a measured text-backbone parameter inventory plus a clearly labelled all-layer MoE estimate. The 0.4B target is reported separately for transformer-core active parameters and the full-vocabulary logits projection; it is not assumed to be achievable. See `docs/INDEPENDENT_MOE_VALIDATION.md`.
