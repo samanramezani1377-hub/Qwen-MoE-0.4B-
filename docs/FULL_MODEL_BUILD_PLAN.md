@@ -39,4 +39,10 @@ Per-layer checkpoints هنوز برای بارگذاری به‌عنوان مد�
 
 ## محدودیت آموزشی
 این روش تقطیر، خروجی FFN متراکم را هدف می‌گیرد؛ خودش به‌تنهایی آموزش مستقیم روی پاسخ‌های صحیح یا حفظ استدلال را تضمین نمی‌کند. اگر مدل کامل پس از تبدیل افت زیادی نشان دهد، مرحلهٔ بعدی باید fine-tuning در سطح مدل کامل با دادهٔ مناسب باشد، نه صرفاً زیاد کردن epochهای هر FFN.
-\n\n## ابزارهای سخت‌گیرانهٔ اعتبارسنجی و ارزیابی\n\nقبل از ادعای مدل کامل، از `python scripts/validate_checkpoint_set.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --layers 24 --num-experts 32 --top-k 2` استفاده کنید. سپس با یک فایل مستقل از دادهٔ آموزش (یک سند در هر خط) اجرا کنید: `python scripts/evaluate_full_model.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --text-file /content/fa_eval.txt --output /content/full_model_eval.json --device auto`. این ارزیابی مدل معلم و مدل patched را روی همان اسناد مقایسه می‌کند. فایل eval نباید در corpus آموزشی وجود داشته باشد.\n\n`moe_runtime.py` یک runtime آزمایشی داخل فرایند برای ارزیابی است، نه یک معماری Hugging Face مستقل. برای توزیع مستقل هنوز باید ماژول مدل سفارشی را در بستهٔ مدل قرار داد، `config.json`/`auto_map` و بارگذاری مجدد را تست کرد، و سپس مسیر inference موبایل را اعتبارسنجی کرد.\n
+
+
+## ابزارهای سخت‌گیرانهٔ اعتبارسنجی و ارزیابی
+
+قبل از ادعای مدل کامل، از `python scripts/validate_checkpoint_set.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --layers 24 --num-experts 32 --top-k 2` استفاده کنید. سپس با یک فایل مستقل از دادهٔ آموزش (یک سند در هر خط) اجرا کنید: `python scripts/evaluate_full_model.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --text-file /content/fa_eval.txt --output /content/full_model_eval.json --device auto`. این ارزیابی مدل معلم و مدل patched را روی همان اسناد مقایسه می‌کند. فایل eval نباید در corpus آموزشی وجود داشته باشد.
+
+`moe_runtime.py` یک runtime آزمایشی داخل فرایند برای ارزیابی است، نه یک معماری Hugging Face مستقل. برای توزیع مستقل هنوز باید ماژول مدل سفارشی را در بستهٔ مدل قرار داد، `config.json`/`auto_map` و بارگذاری مجدد را تست کرد، و سپس مسیر inference موبایل را اعتبارسنجی کرد.
