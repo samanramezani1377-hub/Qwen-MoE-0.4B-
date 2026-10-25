@@ -46,7 +46,12 @@ def load_index(index_path: Path, max_samples: int = 0) -> list[dict[str, Any]]:
             row["_tensor_path"] = (index_path.parent / rel).resolve()
             by_id[sid] = row
     rows = list(by_id.values())
-    rows = [r for r in rows if r["_tensor_path"].is_file()]
+    missing = [str(r["_tensor_path"]) for r in rows if not r["_tensor_path"].is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"{len(missing)} indexed tensor files are missing; first examples: {missing[:3]}. "
+            "Re-run the logits extractor to repair the index before training."
+        )
     if max_samples:
         rows = rows[:max_samples]
     if not rows:
@@ -294,8 +299,12 @@ def main() -> int:
     seen_steps = 0
     try:
         with log_path.open("a", encoding="utf-8") as metrics:
-            for epoch in range(args.epochs):
-                for row in rows:
+            first_epoch = start_step // len(rows)
+            first_row = start_step % len(rows)
+            for epoch in range(first_epoch, args.epochs):
+                row_start = first_row if epoch == first_epoch else 0
+                for row_index in range(row_start, len(rows)):
+                    row = rows[row_index]
                     sample = load_sample(row, expected_vocab=int(model.config.vocab_size),
                                          temperature=args.temperature)
                     ids = sample["input_ids"].to(device).long().unsqueeze(0)
