@@ -280,7 +280,8 @@ def main():
              eval_documents=len(eval_doc_ids), train_tokens=len(x_train), eval_tokens=len(x_eval))
     moe = make_moe_from_ffn(ffn, a.num_experts, a.top_k).to(device)
     progress("moe_initialized", experts=a.num_experts, top_k=a.top_k,
-             train_tokens=int(len(train_ids)), eval_tokens=int(len(eval_ids)))
+             train_documents=len(train_doc_ids), eval_documents=len(eval_doc_ids),
+             train_tokens=int(len(x_train)), eval_tokens=int(len(x_eval)))
     params = [q for q in moe.parameters() if q.requires_grad]
     opt = torch.optim.AdamW(params, lr=a.lr)
     loader = DataLoader(TensorDataset(x_train, y_train), batch_size=a.batch_size, shuffle=True)
@@ -325,7 +326,7 @@ def main():
     eval_relative_error = (eval_pred - y_eval).norm().item() / y_eval.norm().clamp_min(1e-12).item()
     eval_cosine = F.cosine_similarity(eval_pred.reshape(1, -1), y_eval.reshape(1, -1)).item()
     progress("benchmark_stage_started", purpose="original FFN versus trained top-2 MoE")
-    benchmark = benchmark_ffn_vs_moe(ffn, moe, x_all, device,
+    benchmark = benchmark_ffn_vs_moe(ffn, moe, x_eval, device,
                                      warmup=a.benchmark_warmup, repeats=a.benchmark_repeats)
     benchmark.update({
         "model_id": a.model, "layer": a.layer, "num_experts": a.num_experts, "top_k": a.top_k,
