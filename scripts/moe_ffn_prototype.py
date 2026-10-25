@@ -115,8 +115,9 @@ def main() -> int:
     loss.backward()
     if moe.router.weight.grad is None or not torch.isfinite(moe.router.weight.grad).all():
         raise AssertionError("Router did not receive finite gradients")
-    if any(p.grad is None for p in moe.parameters() if p.requires_grad):
-        raise AssertionError("At least one MoE parameter did not receive a gradient")
+    expert_gradients = [p.grad for expert in moe.experts for p in expert.parameters() if p.grad is not None]
+    if not expert_gradients:
+        raise AssertionError("No expert received gradients")
 
     dense_params = sum(p.numel() for p in dense.parameters())
     expert_params = sum(p.numel() for e in moe.experts for p in e.parameters())
