@@ -51,14 +51,15 @@ def main() -> int:
     parser.add_argument("--revision", default=None, help="Optional pinned Hugging Face revision")
     parser.add_argument("--top-k", type=int, default=64,
                         help="Store top-k logits per answer position (sparse approximation)")
-    parser.add_argument("--max-seq-length", type=int, default=512)
+    parser.add_argument("--max-seq-length", type=int, default=256)
+    parser.add_argument("--temperature", type=float, default=1.0, help="KD temperature used for top-k logits and full-vocabulary log-normalizer")
     parser.add_argument("--max-samples", type=int, default=0,
                         help="0 means all samples; use a small value for smoke tests")
     parser.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
     args = parser.parse_args()
 
-    if args.top_k < 1 or args.max_seq_length < 16:
-        parser.error("--top-k must be >=1 and --max-seq-length >=16")
+    if args.top_k < 1 or args.max_seq_length < 16 or args.temperature <= 0:
+        parser.error("--top-k must be >=1, --max-seq-length >=16, and --temperature >0")
     rows = read_jsonl(args.input_jsonl)
     if args.max_samples:
         rows = rows[:args.max_samples]
@@ -89,6 +90,8 @@ def main() -> int:
     model.eval()
     model_device = next(model.parameters()).device
     model_vocab = int(model.config.vocab_size)
+    if args.top_k > model_vocab:
+        raise ValueError(f"--top-k={args.top_k} exceeds model vocabulary size {model_vocab}")
     actual_k = min(args.top_k, model_vocab)
     manifest_path = args.output_dir / "qwen_logits_manifest.json"
     index_path = args.output_dir / "qwen_logits_index.jsonl"
@@ -131,18 +134,23 @@ def main() -> int:
                 # Position i predicts token i+1. Align to answer token positions only.
                 start = len(prefix_ids) - 1
                 end = start + len(answer_ids)
-                answer_logits = outputs.logits[0, start:end, :]  # Avoid a full float32 copy of the large vocabulary tensor
-                values, indices = torch.topk(answer_logits, k=actual_k, dim=-1)
+                answer_logits = outputs.logits[0, start:end, :]  # Only the answer positions are retained
+                scaled_logits = answer_logits.float() / args.temperature
+                teacher_logsumexp = torch.logsumexp(scaled_logits, dim=-1)
+                values, indices = torch.topk(scaled_logits, k=actual_k, dim=-1)
                 # Keep sparse logits, not normalized probabilities; consumers can apply
                 # temperature/log-softmax after loading. Store target token IDs separately.
                 payload = {
                     "topk_token_ids": indices.to(device="cpu", dtype=torch.int32),
-                    "topk_logits": values.to(device="cpu", dtype=torch.float16),
+                    "topk_logits": values.to(device="cpu", dtype=torch.float32),
+                    "teacher_logsumexp": teacher_logsumexp.to(device="cpu", dtype=torch.float32),
+                    "input_ids": torch.tensor(all_ids, dtype=torch.int32),
                     "target_token_ids": torch.tensor(answer_ids, dtype=torch.int32),
                     "prefix_token_count": len(prefix_ids),
                     "answer_token_count": len(answer_ids),
                     "vocab_size": model_vocab,
                     "top_k": actual_k,
+                    "temperature": args.temperature,
                 }
                 torch.save(payload, tensor_path)
             index_row = {
@@ -174,8 +182,10 @@ def main() -> int:
         "top_k": actual_k,
         "vocab_size": model_vocab,
         "max_seq_length": args.max_seq_length,
+        "temperature": args.temperature,
+        "tokenizer_id": args.model,
         "storage_format": "sparse top-k logits per answer token; approximate KD signal",
-        "important_limit": "Top-k logits omit the vocabulary tail and are not equivalent to full logits. Use a student with the same tokenizer/vocabulary for token-aligned distillation.",
+        "important_limit": "Top-k logits omit individual tail classes; teacher_logsumexp preserves the full-vocabulary normalization so the trainer can aggregate the omitted tail as one bucket. This is an approximation, not exact full-vocabulary KL. Use a student with the same tokenizer/vocabulary.",
     }
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
