@@ -296,6 +296,7 @@ jobs:
           cp downloaded-persian-artifact/artifacts/layer0_persian_top2_experiment.pt hf-model/experiments/layer0_persian_top2_experiment.pt
           cp downloaded-persian-artifact/artifacts/layer0_persian_top2_experiment.benchmark.json hf-model/experiments/layer0_persian_top2_experiment.benchmark.json
           cp downloaded-persian-artifact/artifacts/layer0_persian_validation_report.json hf-model/experiments/layer0_persian_validation_report.json
+          cp downloaded-persian-artifact/artifacts/active_budget_sweep.json hf-model/experiments/active_budget_sweep.json
           cp downloaded-persian-artifact/data/fa_persian_corpus.manifest.json hf-model/experiments/persian_corpus.manifest.json
           cp downloaded-persian-artifact/data/fa_document_split.manifest.json hf-model/experiments/persian_document_split.manifest.json
           cat > hf-model/experiments/README.md <<'EOF'
@@ -306,7 +307,7 @@ jobs:
           See `persian_corpus.manifest.json` for dataset, license, sample count, and document provenance.
           The collector has no synthetic fallback: if both real sources fail, the training job fails.
 
-          `layer0_persian_top2_experiment.benchmark.json` records original-FFN versus trained top-2 MoE forward-only timing. `layer0_persian_validation_report.json` adds independent-document evaluation, zero/random-router baselines, relative error, process memory, and parameter accounting. Timing is layer-level, not end-to-end generation speed or Android performance.
+          `layer0_persian_top2_experiment.benchmark.json` records original-FFN versus trained top-2 MoE forward-only timing. `layer0_persian_validation_report.json` adds independent-document evaluation, zero/random-router baselines, relative error, process memory, and parameter accounting. `active_budget_sweep.json` compares 8/16/32/48 experts at top-2 using the same held-out Persian documents and a bounded training sample; it reports layer-output imitation metrics and estimated all-layer active parameter budgets. These are screening results, not end-to-end language quality or Android performance.
           EOF
           cd hf-model
           git lfs track "experiments/*.pt"
