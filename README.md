@@ -32,6 +32,7 @@
 
 ## اسناد مهم
 
+- [پرامپت آمادهٔ تولید دادهٔ متنی ChatGPT](docs/CHATGPT_TRAINING_DATA_PROMPT.md)
 - [ممیزی عمیق تبدیل MoE و معیارهای پذیرش](docs/MOE_CONVERSION_AUDIT.md)
 - [بودجه و فرض‌های معماری](docs/ARCHITECTURE_BUDGET.md)
 - [راهنمای تقطیر فعال‌سازی FFN](docs/REAL_ACTIVATION_DISTILLATION.md)
