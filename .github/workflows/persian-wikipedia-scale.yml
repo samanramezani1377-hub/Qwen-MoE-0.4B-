@@ -26,7 +26,7 @@ jobs:
         run: |
           python - <<'PY'
           from datasets import load_dataset
-          import os
+          import os, sys
           os.makedirs("data", exist_ok=True)
           stream = load_dataset("wikimedia/wikipedia", "20231101.fa", split="train", streaming=True)
           count = 0
@@ -41,7 +41,14 @@ jobs:
                       break
           if count < 256:
               raise RuntimeError(f"Expected 256 samples, got {count}")
-          print(f"Collected {count} Persian samples")
+          f.flush()
+          os.fsync(f.fileno())
+          print(f"Collected {count} Persian samples", flush=True)
+          # Some hosted runners crash during native PyArrow teardown after a
+          # successful streaming iteration. The file is flushed and synced, so
+          # exit without running problematic extension-module finalizers.
+          sys.stdout.flush()
+          os._exit(0)
           PY
       - name: Train and evaluate one real FFN layer
         env:
