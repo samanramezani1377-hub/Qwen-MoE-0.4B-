@@ -1,14 +1,6 @@
 name: Parallel validation
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/audit_model.py"
-      - "scripts/moe_ffn_prototype.py"
-      - "scripts/test_qwen_ffn_transfer.py"
-      - "scripts/distill_real_qwen_ffn.py"
-      - ".github/workflows/parallel-validation.yml"
   workflow_dispatch:
 
 permissions:
