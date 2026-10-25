@@ -97,8 +97,8 @@ def main():
         intermediate,hidden=gate.shape
         if intermediate%a.num_experts: raise ValueError(f"Layer {li} intermediate={intermediate} is not divisible by {a.num_experts}")
         # Fixed seeded projections reduce feature size while retaining channel-specific weight signatures.
-        gen=torch.Generator().manual_seed(a.seed+li)
-        proj=torch.randn(hidden,16,generator=gen)/math.sqrt(16)
+        gen=torch.Generator(device=gate.device).manual_seed(a.seed+li)
+        proj=torch.randn(hidden,16,generator=gen,device=gate.device)/math.sqrt(16)
         weight_features=torch.cat([gate@proj,up@proj,down.T@proj],dim=1)
         stats=[]
         for name in ("gate_proj","up_proj"):
