@@ -134,6 +134,8 @@ def main() -> int:
     teacher = AutoModel.from_pretrained(a.model, torch_dtype=dtype, low_cpu_mem_usage=True,
                                         trust_remote_code=a.trust_remote_code).to(device).eval()
     teacher_revision = getattr(getattr(teacher, "config", None), "_commit_hash", None)
+    if not teacher_revision:
+        raise RuntimeError("Could not resolve the teacher's immutable Hugging Face revision; refusing to create untraceable checkpoints.")
     log("teacher_loaded", model=a.model, teacher_revision=teacher_revision)
     text_model = get_text_model(teacher)
     layers = text_model.layers
