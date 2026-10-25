@@ -32,7 +32,7 @@ jobs:
           path = Path("kaggle/combined_moe/kernel-metadata.json")
           data = json.loads(path.read_text(encoding="utf-8"))
           data["id"] = "samanramezani/qwen-moe-combined-text-qwen-kd"
-          path.write_text(json.dumps(data, indent=2) + "\\n", encoding="utf-8")
+          path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
           print("Prepared Kaggle kernel:", data["id"])
           PY
 
