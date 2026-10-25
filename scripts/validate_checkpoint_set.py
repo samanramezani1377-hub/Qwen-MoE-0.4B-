@@ -17,6 +17,8 @@ def main() -> int:
     pattern = re.compile(r"layer_(\d+)_top(\d+)_(\d+)experts\.pt")
     found = {}
     problems = []
+    model_ids = set()
+    teacher_revisions = set()
     for path in sorted(a.checkpoint_dir.glob("layer_*.pt")):
         m = pattern.fullmatch(path.name)
         if not m:
@@ -36,6 +38,12 @@ def main() -> int:
         try:
             obj = torch.load(path, map_location="cpu", weights_only=False)
             expected = {"layer": layer, "top_k": a.top_k, "num_experts": a.num_experts}
+            if not obj.get("model_id"):
+                raise ValueError("model_id metadata missing")
+            if not obj.get("teacher_revision"):
+                raise ValueError("teacher_revision metadata missing; regenerate checkpoint with current script")
+            model_ids.add(obj["model_id"])
+            teacher_revisions.add(obj["teacher_revision"])
             for key, value in expected.items():
                 if obj.get(key) != value:
                     raise ValueError(f"{key}: got {obj.get(key)!r}, expected {value!r}")
@@ -60,10 +68,14 @@ def main() -> int:
                     raise ValueError(f"expert {e} down shape mismatch")
         except Exception as exc:
             problems.append({"file": path.name, "error": str(exc)})
+    if len(model_ids) > 1:
+        problems.append({"error": "checkpoints use different base model IDs", "values": sorted(model_ids)})
+    if len(teacher_revisions) > 1:
+        problems.append({"error": "checkpoints use different teacher revisions", "values": sorted(teacher_revisions)})
     report = {"status": "passed" if not problems and len(found) == a.layers else "failed",
               "checkpoint_dir": str(a.checkpoint_dir), "expected_layers": a.layers,
               "compatible_checkpoint_count": len(found), "num_experts": a.num_experts,
-              "top_k": a.top_k, "problems": problems,
+              "top_k": a.top_k, "model_ids": sorted(model_ids),\n              "teacher_revisions": sorted(teacher_revisions), "problems": problems,
               "note": "Structural validation only; does not prove language quality or full-model compatibility."}
     rendered = json.dumps(report, ensure_ascii=False, indent=2)
     print(rendered)
