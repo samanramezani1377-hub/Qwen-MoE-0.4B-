@@ -1,0 +1,133 @@
+name: Sync Kaggle MoE results back to GitHub
+
+on:
+  workflow_dispatch:
+    inputs:
+      kaggle_username:
+        description: "Kaggle username that owns the training kernel"
+        required: false
+        default: "samanramezani"
+        type: string
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kaggle-moe-results-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-results:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Kaggle CLI
+        run: python -m pip install --upgrade kaggle
+
+      - name: Check Kaggle kernel status
+        id: status
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN || secrets.kaggle }}
+          KAGGLE_USERNAME_INPUT: ${{ inputs.kaggle_username || 'samanramezani' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KAGGLE_API_TOKEN:-}" ]; then
+            echo "::error::Missing repository secret KAGGLE_API_TOKEN or kaggle."
+            exit 1
+          fi
+          KERNEL_ID="${KAGGLE_USERNAME_INPUT}/qwen-moe-combined-text-qwen-kd"
+          echo "kernel_id=$KERNEL_ID" >> "$GITHUB_OUTPUT"
+          set +e
+          STATUS="$(kaggle kernels status "$KERNEL_ID" 2>&1)"
+          RC=$?
+          set -e
+          echo "$STATUS"
+          echo "status_text<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$STATUS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          if [ "$RC" -ne 0 ]; then
+            echo "kernel_state=UNKNOWN" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if echo "$STATUS" | grep -qi 'COMPLETE'; then
+            echo "kernel_state=COMPLETE" >> "$GITHUB_OUTPUT"
+          elif echo "$STATUS" | grep -qi 'ERROR\|CANCEL'; then
+            echo "kernel_state=FAILED" >> "$GITHUB_OUTPUT"
+          elif echo "$STATUS" | grep -qi 'RUNNING\|QUEUED\|PENDING'; then
+            echo "kernel_state=RUNNING" >> "$GITHUB_OUTPUT"
+          else
+            echo "kernel_state=UNKNOWN" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Kaggle output
+        if: steps.status.outputs.kernel_state == 'COMPLETE'
+        continue-on-error: true
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN || secrets.kaggle }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/kaggle-output
+          kaggle kernels output "${{ steps.status.outputs.kernel_id }}" -p /tmp/kaggle-output
+
+      - name: Publish compact results to repository
+        if: always() && (steps.status.outputs.kernel_state == 'COMPLETE' || steps.status.outputs.kernel_state == 'FAILED')
+        env:
+          KERNEL_ID: ${{ steps.status.outputs.kernel_id }}
+          KERNEL_STATE: ${{ steps.status.outputs.kernel_state }}
+          KERNEL_STATUS_TEXT: ${{ steps.status.outputs.status_text }}
+        run: |
+          set -euo pipefail
+          mkdir -p results/kaggle/latest
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path("results/kaggle/latest")
+          root.mkdir(parents=True, exist_ok=True)
+          report = {
+              "kernel_id": os.environ.get("KERNEL_ID", ""),
+              "kernel_state": os.environ.get("KERNEL_STATE", "UNKNOWN"),
+              "kaggle_status": os.environ.get("KERNEL_STATUS_TEXT", ""),
+              "sync_timestamp_utc": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+              "note": "GitHub stores compact metrics and evaluation only, not model checkpoint weights."
+          }
+          found = False
+          for p in Path("/tmp/kaggle-output").rglob("qwen_moe_results.json"):
+              try:
+                  report["training_results"] = json.loads(p.read_text(encoding="utf-8"))
+                  found = True
+                  break
+              except Exception as e:
+                  report["result_parse_error"] = repr(e)
+          report["training_results_available"] = found
+          if not found:
+              report["note"] += " No qwen_moe_results.json was found in downloaded output; check the Kaggle notebook logs and output download step."
+          (root / "result.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps({"kernel_state": report["kernel_state"], "training_results_available": found}, indent=2))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/kaggle/latest/result.json
+          if git diff --cached --quiet; then
+            echo "No new result changes to commit."
+          else
+            git commit -m "Sync Kaggle MoE training results [skip ci]"
+            git push
+          fi
+
+      - name: Report that Kaggle is still running
+        if: steps.status.outputs.kernel_state == 'RUNNING'
+        run: echo "Kaggle kernel is still running; this scheduled workflow will check again in 15 minutes."
+
+      - name: Report unknown Kaggle status
+        if: steps.status.outputs.kernel_state == 'UNKNOWN'
+        run: echo "Could not determine Kaggle kernel status. Check the step logs and Kaggle notebook page."
