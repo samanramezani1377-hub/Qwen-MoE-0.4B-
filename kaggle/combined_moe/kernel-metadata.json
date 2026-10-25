@@ -1,6 +1,6 @@
 {
   "id": "REPLACE_WITH_KAGGLE_USERNAME/qwen-moe-combined-text-qwen-kd",
-  "title": "Qwen MoE Combined ChatGPT Text + Qwen Logits KD",
+  "title": "Qwen MoE Combined Text Qwen KD",
   "code_file": "qwen_moe_combined_text_qwen_kd.ipynb",
   "language": "python",
   "kernel_type": "notebook",
