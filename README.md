@@ -23,17 +23,18 @@
 
 نوت‌بوک‌های \`01\` و \`03\` و اسکریپت‌های activation-distillation ابزارهای پژوهشی قبلی هستند و توسط مسیر اصلی ترکیبی اجرا نمی‌شوند.
 
-## معماری آزمایشی فعلی
+## معماری: تحلیل قبل از ساخت اکسپرت
 
-تنظیم پیش‌فرض اسکریپت تمام‌لایه‌ها: 32 expert کانال‌شاردشده و Top-2، با جداسازی ثابت اسناد train/eval در همهٔ لایه‌ها. این فقط یک روش آزمایشی برای تقطیر FFN است؛ هنوز به‌معنای تبدیل کامل Qwen به MoE نیست.
+نوت‌بوک اصلی ابتدا وزن‌ها و فعال‌سازی‌های واقعی FFN را تحلیل می‌کند و برای هر لایه گروه‌های متوازن کانال می‌سازد؛ سپس checkpointهای اولیه را از همان وزن‌های pretrained تولید می‌کند. این مرحله آموزش جداگانه نیست. تنها آموزش، متن ChatGPT + تقطیر sparse logits معلم Qwen در یک حلقه است. جزئیات: [طرح تحلیل‌محور](docs/ANALYSIS_FIRST_MOE_PLAN.md), [تحلیل کانال‌ها](scripts/analyze_expert_channels.py), [ساخت checkpoint اولیه](scripts/build_moe_initial_checkpoints.py).
 
-**هدف تثبیت‌شده:** حدود ۱٫۱B پارامتر فعال، با اولویت حفظ استدلال و کیفیت پاسخ. برآورد فرمولی فعلی حدود ۱٫۰۸۶B است؛ این عدد باید پس از بسته‌بندی با شمارش دقیق تأیید شود. 32/Top-2 تعداد پارامترهای ذخیره‌شدهٔ FFN را کاهش نمی‌دهد؛ فقط تعداد کانال‌های FFN فعال در هر توکن را کاهش می‌دهد.
+با 32 expert، top-2 و عرض هر expert برابر 192، پارامتر فعال FFN تقریباً 56.6M است؛ اما attention و projection خروجی واژگان متراکم باقی می‌مانند و کل مسیر فعال حدود 1.09B برآورد می‌شود. بنابراین سقف 86M فقط برای فعال‌های FFN قابل اعمال است، نه کل مدل all-in. MoE نیز وزن‌های ذخیره‌شده را خودکار کوچک نمی‌کند.
 
 ## اسناد مهم
 
 - [پرامپت آمادهٔ تولید دادهٔ متنی ChatGPT](docs/CHATGPT_TRAINING_DATA_PROMPT.md)
 - [ممیزی عمیق تبدیل MoE و معیارهای پذیرش](docs/MOE_CONVERSION_AUDIT.md)
 - [بودجه و فرض‌های معماری](docs/ARCHITECTURE_BUDGET.md)
+- [طرح تحلیل‌محور اکسپرت‌ها و تعریف دقیق پارامتر فعال](docs/ANALYSIS_FIRST_MOE_PLAN.md)
 - [راهنمای تقطیر فعال‌سازی FFN](docs/REAL_ACTIVATION_DISTILLATION.md)
 - [طرح ساخت مدل کامل](docs/FULL_MODEL_BUILD_PLAN.md)
 - [وضعیت پیاده‌سازی و محدودیت‌های باقی‌مانده](docs/IMPLEMENTATION_STATUS.md)
@@ -61,4 +62,4 @@
 
 این مسیر اکنون یک مسیر واحد برای آموزش ترکیبی دارد: پاسخ‌های متنی ChatGPT برای Cross-Entropy و logits معلم Qwen برای تقطیر sparse در همان حلقهٔ آموزش. اسکریپت `scripts/capture_qwen_logits_for_chatgpt_data.py` ورودی توکن‌شدهٔ دقیق، شناسه‌های توکن هدف، logits برتر و log-normalizer کل واژگان را ذخیره می‌کند. اسکریپت `scripts/train_moe_chatgpt_qwen_kd.py` مدل کامل را با ۲۴ checkpoint اولیهٔ MoE بارگذاری می‌کند، backbone را فریز می‌کند و expertها/routerها را با `text_cross_entropy + kd_weight * sparse_aggregated_tail_KL` آموزش می‌دهد. KL از top-k معلم و یک bucket برای جرم احتمالاتی باقی واژگان استفاده می‌کند؛ تقریب است، نه KL دقیق واژگان کامل.
 
-آرشیو متنی نسخهٔ فعلی در GitHub نگهداری می‌شود: [`data/chatgpt_prompt_response_archive_part2.jsonl`](data/chatgpt_prompt_response_archive_part2.jsonl) (۷۵ نمونه). اسکریپت `scripts/validate_chatgpt_archive.py` ساختار JSONL، یکتایی شناسه‌ها و نبود رکورد خالی را بررسی می‌کند؛ این بررسی در GitHub Actions نیز اجرا می‌شود. نوت‌بوک دیگر برای ورودی متن به `chatgpt_prompt_response_archive.jsonl` روی Drive مراجعه نمی‌کند. خروجی logits در `qwen_logits_output/` و checkpointهای آموزش در `combined_moe_training/checkpoints/` روی Google Drive قرار می‌گیرند؛ چک‌پوینت‌های اولیه نیز در Drive باقی می‌مانند. نوت‌بوک `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb` یک مسیر کامل و واحد را اجرا می‌کند؛ مقایسهٔ text-only/logits-only یا آزمایش‌های جایگزین اجرا نمی‌شوند. کد به‌صورت static بررسی می‌شود، اما فقط اجرای موفق واقعی در Colab می‌تواند آموزش را تأیید کند.
+آرشیو متنی نسخهٔ فعلی در GitHub نگهداری می‌شود: [`data/chatgpt_prompt_response_archive_part2.jsonl`](data/chatgpt_prompt_response_archive_part2.jsonl) (۱٬۲۷۵ نمونه؛ تعداد نهایی را با validator بازبینی کن). اسکریپت `scripts/validate_chatgpt_archive.py` ساختار JSONL، یکتایی شناسه‌ها و نبود رکورد خالی را بررسی می‌کند؛ این بررسی در GitHub Actions نیز اجرا می‌شود. نوت‌بوک دیگر برای ورودی متن به `chatgpt_prompt_response_archive.jsonl` روی Drive مراجعه نمی‌کند. خروجی logits در `qwen_logits_output/` و checkpointهای آموزش در `combined_moe_training/checkpoints/` روی Google Drive قرار می‌گیرند. نوت‌بوک در ابتدای اجرا فقط مجموعهٔ قدیمیِ ۲۴ فایل `layer_00_top2_32experts.pt` تا `layer_23_top2_32experts.pt` را در مسیر قبلی هدف می‌گیرد؛ اگر مجموعه دقیقاً کامل نباشد، حذف را متوقف می‌کند. وزن‌های پایه و فایل‌های دیگر دست‌نخورده می‌مانند. در این نشست حذف Drive هنوز اجرا/تأیید نشده است. نوت‌بوک `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb` یک مسیر کامل و واحد را اجرا می‌کند؛ مقایسهٔ text-only/logits-only یا آزمایش‌های جایگزین اجرا نمی‌شوند. کد به‌صورت static بررسی می‌شود، اما فقط اجرای موفق واقعی در Colab می‌تواند آموزش را تأیید کند.
