@@ -12,7 +12,7 @@ import math
 import random
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import torch
 import torch.nn.functional as F
@@ -140,13 +140,13 @@ def sparse_aggregated_tail_kl(student_logits: torch.Tensor, sample: dict[str, An
 
 
 def checkpoint_payloads(model: torch.nn.Module, model_id: str, revision: str,
-                        num_experts: int, top_k: int, step: int) -> list[tuple[str, dict[str, Any]]]:
+                        num_experts: int, top_k: int, step: int) -> Iterator[tuple[str, dict[str, Any]]]:
+    # Yield one layer at a time so checkpointing does not duplicate all MoE weights in host RAM.
     text_model = get_text_model(model)
-    result = []
     for layer_idx, layer in enumerate(text_model.layers):
         mlp = layer.mlp
         state = {k: v.detach().to("cpu").contiguous() for k, v in mlp.state_dict().items()}
-        result.append((
+        yield (
             f"layer_{layer_idx}_top{top_k}_{num_experts}experts.pt",
             {
                 "layer": layer_idx,
@@ -158,8 +158,7 @@ def checkpoint_payloads(model: torch.nn.Module, model_id: str, revision: str,
                 "training_method": "chatgpt_text_plus_qwen_sparse_logits_kd",
                 "training_step": step,
             },
-        ))
-    return result
+        )
 
 
 def save_state(model: torch.nn.Module, output_dir: Path, model_id: str, revision: str,
