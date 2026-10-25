@@ -108,7 +108,12 @@ def main() -> int:
     if not eval_rows and len(rows) >= 2:
         # Deterministic fallback ensures a held-out set exists.
         eval_rows.append(train_pool.pop())
+    if not train_pool and len(eval_rows) >= 2:
+        # Keep at least one train record even for very small archives.
+        train_pool.append(eval_rows.pop())
     train_rows = train_pool[: args.max_train_samples]
+    if not train_rows:
+        raise RuntimeError("No train records remain after splitting; inspect archive and split settings.")
 
     def write_jsonl(path: Path, data: list[dict[str, Any]]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
