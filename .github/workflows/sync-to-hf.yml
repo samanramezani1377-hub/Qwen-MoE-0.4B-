@@ -12,6 +12,26 @@ jobs:
       - name: Checkout GitHub repository
         uses: actions/checkout@v4
 
+      - name: Set up Python for the CPU-only metadata audit
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit model metadata and safetensors headers (no weight download)
+        id: model-audit
+        continue-on-error: true
+        run: |
+          python scripts/audit_model.py --output audit-report.json
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen-model-audit-report
+          path: audit-report.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
