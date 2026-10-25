@@ -103,7 +103,8 @@ def summarize_tensor_headers(files: list[dict[str, Any]], base: str) -> dict[str
                 by_component[component] += tensor["numel"]
             ffn_tensors = [
                 tensor for tensor in header["tensors"]
-                if any(part in tensor["name"].lower() for part in ("mlp", "ffn", "feed_forward"))
+                if tensor["name"].startswith("model.language_model.layers.")
+                and ".mlp." in tensor["name"]
             ]
             summaries.append({
                 "file": name,
