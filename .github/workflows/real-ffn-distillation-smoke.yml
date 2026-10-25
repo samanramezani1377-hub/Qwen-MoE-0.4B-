@@ -2,10 +2,6 @@ name: Real Qwen FFN distillation (CPU smoke run)
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - ".github/workflows/real-ffn-distillation-smoke.yml"
-      - "scripts/distill_real_qwen_ffn.py"
 
 permissions:
   contents: read
