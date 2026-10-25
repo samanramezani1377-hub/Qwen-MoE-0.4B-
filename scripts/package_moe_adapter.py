@@ -23,7 +23,7 @@ def main():
     p.add_argument("--checkpoint-dir", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
     p.add_argument("--model", default="Qwen/Qwen3.5-2B")
-    p.add_argument("--model-revision", default="main", help="Prefer an immutable resolved commit SHA for releases")
+    p.add_argument("--model-revision", default=None, help="Optional revision assertion; defaults to revision recorded in checkpoints")
     p.add_argument("--num-experts", type=int, default=32)
     p.add_argument("--top-k", type=int, default=2)
     p.add_argument("--layers", type=int, default=24)
@@ -38,13 +38,13 @@ def main():
     if check.returncode:
         print(check.stdout)
         raise SystemExit("Checkpoint validation failed; package was not created.")
-    files = sorted(a.checkpoint_dir.glob(f"layer_*_top{a.top_k}_{a.num_experts}experts.pt"))
+    files = sorted(a.checkpoint_dir.glob(f"layer_*_top{a.top_k}_{a.num_experts}experts.pt"))\n    first_payload = __import__("torch").load(files[0], map_location="cpu", weights_only=False)\n    checkpoint_revision = first_payload.get("teacher_revision")\n    if not checkpoint_revision:\n        raise SystemExit("Checkpoint has no immutable teacher_revision; regenerate checkpoints.")\n    if a.model_revision and a.model_revision != checkpoint_revision:\n        raise SystemExit(f"Requested revision {a.model_revision} does not match checkpoint revision {checkpoint_revision}")
     out = a.output_dir
     out.mkdir(parents=True,exist_ok=True)
     target = out / "checkpoints"
     target.mkdir(exist_ok=True)
     manifest = {"format":"qwen-moe-overlay-v1","created_at_utc":datetime.now(timezone.utc).isoformat(),
-                "base_model":a.model,"base_model_revision":a.model_revision,
+                "base_model":a.model,"base_model_revision":checkpoint_revision,
                 "layers":a.layers,"num_experts":a.num_experts,"top_k":a.top_k,
                 "checkpoint_files":[],"validation":"structural validation passed",
                 "standalone":False,
