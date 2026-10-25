@@ -12,6 +12,8 @@
 - [اسکریپت استخراج logits هم‌تراز با پاسخ](scripts/capture_qwen_logits_for_chatgpt_data.py)
 - [اسکریپت آموزش ترکیبی MoE با CE + sparse KD](scripts/train_moe_chatgpt_qwen_kd.py)
 - [پرامپت تولید دادهٔ متنی ChatGPT](docs/CHATGPT_TRAINING_DATA_PROMPT.md)
+- [راهنمای آرشیو دیتاست](data/README.md)
+- [اعتبارسنجی JSONL دیتاست](scripts/validate_chatgpt_archive.py)
 - [اعتبارسنجی checkpointهای ۲۴ لایه](scripts/validate_checkpoint_set.py)
 - [Runtime آزمایشی برای جایگزینی FFNها](scripts/moe_runtime.py)
 - [ارزیابی سرتاسری معلم در برابر MoE](scripts/evaluate_full_model.py)
@@ -59,4 +61,4 @@
 
 این مسیر اکنون یک مسیر واحد برای آموزش ترکیبی دارد: پاسخ‌های متنی ChatGPT برای Cross-Entropy و logits معلم Qwen برای تقطیر sparse در همان حلقهٔ آموزش. اسکریپت `scripts/capture_qwen_logits_for_chatgpt_data.py` ورودی توکن‌شدهٔ دقیق، شناسه‌های توکن هدف، logits برتر و log-normalizer کل واژگان را ذخیره می‌کند. اسکریپت `scripts/train_moe_chatgpt_qwen_kd.py` مدل کامل را با ۲۴ checkpoint اولیهٔ MoE بارگذاری می‌کند، backbone را فریز می‌کند و expertها/routerها را با `text_cross_entropy + kd_weight * sparse_aggregated_tail_KL` آموزش می‌دهد. KL از top-k معلم و یک bucket برای جرم احتمالاتی باقی واژگان استفاده می‌کند؛ تقریب است، نه KL دقیق واژگان کامل.
 
-آرشیو متنی نسخهٔ فعلی در GitHub نگهداری می‌شود: `data/chatgpt_prompt_response_archive_part2.jsonl` (۷۵ نمونه). نوت‌بوک دیگر برای ورودی متن به `chatgpt_prompt_response_archive.jsonl` روی Drive مراجعه نمی‌کند. خروجی logits در `qwen_logits_output/` و checkpointهای آموزش در `combined_moe_training/checkpoints/` روی Google Drive قرار می‌گیرند؛ چک‌پوینت‌های اولیه نیز در Drive باقی می‌مانند. نوت‌بوک `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb` یک مسیر کامل و واحد را اجرا می‌کند؛ مقایسهٔ text-only/logits-only یا آزمایش‌های جایگزین اجرا نمی‌شوند. کد به‌صورت static بررسی می‌شود، اما فقط اجرای موفق واقعی در Colab می‌تواند آموزش را تأیید کند.
+آرشیو متنی نسخهٔ فعلی در GitHub نگهداری می‌شود: [`data/chatgpt_prompt_response_archive_part2.jsonl`](data/chatgpt_prompt_response_archive_part2.jsonl) (۷۵ نمونه). اسکریپت `scripts/validate_chatgpt_archive.py` ساختار JSONL، یکتایی شناسه‌ها و نبود رکورد خالی را بررسی می‌کند؛ این بررسی در GitHub Actions نیز اجرا می‌شود. نوت‌بوک دیگر برای ورودی متن به `chatgpt_prompt_response_archive.jsonl` روی Drive مراجعه نمی‌کند. خروجی logits در `qwen_logits_output/` و checkpointهای آموزش در `combined_moe_training/checkpoints/` روی Google Drive قرار می‌گیرند؛ چک‌پوینت‌های اولیه نیز در Drive باقی می‌مانند. نوت‌بوک `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb` یک مسیر کامل و واحد را اجرا می‌کند؛ مقایسهٔ text-only/logits-only یا آزمایش‌های جایگزین اجرا نمی‌شوند. کد به‌صورت static بررسی می‌شود، اما فقط اجرای موفق واقعی در Colab می‌تواند آموزش را تأیید کند.
