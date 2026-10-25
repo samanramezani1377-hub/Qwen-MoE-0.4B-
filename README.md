@@ -74,3 +74,13 @@
 4. خروجی‌های آموزش و ارزیابی در صفحهٔ Kernel در Kaggle، تب **Output** قابل دریافت‌اند.
 
 نوت‌بوک خصوصی تنظیم شده است. وزن‌های پایه از Hugging Face دریافت می‌شوند. GitHub Actions خودش GPU آموزش فراهم نمی‌کند.
+
+
+### همگام‌سازی نتیجهٔ Kaggle با GitHub
+
+پس از پایان اجرای Kaggle، workflow فایل گزارش فشردهٔ `qwen_moe_results.json` را از خروجی Kernel می‌خواند و گزارش را در `results/kaggle/latest/result.json` commit می‌کند. این workflow هر ۱۵ دقیقه وضعیت Kernel را بررسی می‌کند؛ می‌توان آن را هم از تب Actions به‌صورت دستی اجرا کرد.
+
+- [Workflow همگام‌سازی نتایج](https://github.com/samanramezani1377-hub/Qwen-MoE-0.4B-/actions/workflows/sync-kaggle-moe-results.yml)
+- [گزارش آخرین اجرای Kaggle در مخزن](results/kaggle/latest/result.json)
+
+فایل گزارش شامل وضعیت اجرا، تعداد نمونه‌ها، خلاصهٔ آموزش، اعتبارسنجی checkpointها و معیارهای holdout است. وزن‌های مدل و checkpointهای بزرگ در این گزارش commit نمی‌شوند؛ GitHub فقط گزارش فشرده را دریافت می‌کند. اگر اجرای Kaggle پیش از مرحلهٔ ارزیابی شکست بخورد، ممکن است گزارش معیارهای آموزش در خروجی موجود نباشد؛ وضعیت Kernel در گزارش همگام‌سازی ثبت می‌شود.
