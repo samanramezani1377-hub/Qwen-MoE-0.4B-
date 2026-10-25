@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, json
 from pathlib import Path
 import torch
-from transformers import AutoModel
+from transformers import AutoModelForMultimodalLM
 from distill_real_qwen_ffn import get_text_model, make_moe_from_ffn
 
 def main():
@@ -20,7 +20,7 @@ def main():
     if int(plan.get("num_experts",-1))!=a.num_experts: raise ValueError("Plan expert count mismatch")
     revision=plan.get("teacher_revision")
     if not revision: raise ValueError("Plan has no immutable teacher revision")
-    model=AutoModel.from_pretrained(a.model,revision=revision,torch_dtype="auto",low_cpu_mem_usage=True).eval()
+    model=AutoModelForMultimodalLM.from_pretrained(a.model,revision=revision,torch_dtype="auto",low_cpu_mem_usage=True).eval()
     if getattr(model.config,"_commit_hash",None)!=revision: raise ValueError("Loaded teacher revision differs from analysis plan")
     layers=get_text_model(model).layers
     if len(layers)!=int(plan["num_layers"]): raise ValueError("Model layer count differs from analysis plan")
