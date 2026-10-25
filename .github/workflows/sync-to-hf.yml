@@ -1,0 +1,38 @@
+name: Sync test file to Hugging Face
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync-test-file:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitHub repository
+        uses: actions/checkout@v4
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Copy سلام.txt to Hugging Face model repo
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "Missing repository secret HF_TOKEN. Add it in GitHub Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          git clone "https://mrSpaser:${HF_TOKEN}@huggingface.co/mrSpaser/Qwen-MoE-0.4B" hf-model
+          cp "سلام.txt" "hf-model/سلام.txt"
+          cd hf-model
+          git add "سلام.txt"
+          if git diff --cached --quiet; then
+            echo "No changes to sync."
+          else
+            git commit -m "test: add Persian سلام file from GitHub"
+            git push
+          fi
