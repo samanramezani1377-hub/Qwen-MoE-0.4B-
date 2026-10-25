@@ -6,13 +6,12 @@
 
 ## اجرای آموزش
 
-آموزش مدل فعلاً در **Google Colab** انجام می‌شود؛ GitHub Actions برای آموزش و همگام‌سازی آزمایش‌ها به‌صورت پیش‌فرض غیرفعال شده است. Workflow و کدهای آن حذف نشده‌اند و با opt-in دستی می‌توان مسیر آزمایشی قدیمی را در آینده دوباره فعال کرد.
+**مسیر اصلی و واحد آموزش متنی فعلی** در Google Colab است: [نوت‌بوک آموزش ترکیبی متن ChatGPT + logits معلم Qwen](notebooks/02_colab_chatgpt_text_qwen_logits.ipynb). این مسیر پاسخ‌های متنی را با Cross-Entropy و سیگنال logits معلم Qwen را با sparse KD در یک حلقهٔ آموزش استفاده می‌کند؛ مسیرهای text-only و logits-only اجرا نمی‌شوند. داده روی Google Drive می‌ماند و GitHub Actions آموزش مدل را اجرا نمی‌کند.
 
-- [نوت‌بوک Colab آموزش ترکیبی: ۵۰۰هزار توکن فارسی + ۵۰۰هزار توکن تولیدشده توسط معلم](notebooks/01_colab_combined_raw_teacher_distillation.ipynb) — تولید معلم قابل ادامه، ذخیره روی Drive و پایلوت فقط لایهٔ صفر.
-- [Notebook آموزش همهٔ FFNها در Colab](notebooks/03_colab_full_layer_distillation.ipynb)
-- [آماده‌سازی آرشیو معلم و زیرمجموعه‌های train/eval](scripts/prepare_teacher_archive.py)
-- [اسکریپت تقطیر یک FFN](scripts/distill_real_qwen_ffn.py)
-- [اسکریپت تقطیر همهٔ FFNها](scripts/distill_all_qwen_ffn_layers.py)
+- [نوت‌بوک آموزش ترکیبی واحد](notebooks/02_colab_chatgpt_text_qwen_logits.ipynb)
+- [اسکریپت استخراج logits هم‌تراز با پاسخ](scripts/capture_qwen_logits_for_chatgpt_data.py)
+- [اسکریپت آموزش ترکیبی MoE با CE + sparse KD](scripts/train_moe_chatgpt_qwen_kd.py)
+- [پرامپت تولید دادهٔ متنی ChatGPT](docs/CHATGPT_TRAINING_DATA_PROMPT.md)
 - [اعتبارسنجی checkpointهای ۲۴ لایه](scripts/validate_checkpoint_set.py)
 - [Runtime آزمایشی برای جایگزینی FFNها](scripts/moe_runtime.py)
 - [ارزیابی سرتاسری معلم در برابر MoE](scripts/evaluate_full_model.py)
@@ -20,9 +19,7 @@
 - [بسته‌بندی checkpointها با hash و manifest](scripts/package_moe_adapter.py)
 - [بنچمارک سرتاسری تولید و حافظه](scripts/benchmark_moe_generation.py)
 
-## برنامهٔ داده و تقطیر ترکیبی
-
-نوت‌بوک ترکیبی، تا سقف ۵۰۰٬۰۰۰ توکن متن فارسی واقعی و ۵۰۰٬۰۰۰ توکن ادامهٔ تولیدشده توسط مدل معلم را آماده می‌کند. تولید معلم روی Google Drive قابل ادامه است تا قطع runtime باعث از دست رفتن پیشرفت نشود. این دادهٔ تولیدشده فعلاً برای تقطیر activation در مسیر FFN استفاده می‌شود؛ **تقطیر مستقیم logits یا SFT کامل پیاده‌سازی نشده است**. هر نمونهٔ معلم در `teacher_generated.jsonl` همراه متن پرامپت منبع، پرامپت مؤثر پس از tokenization، شناسه‌های توکن ورودی/پاسخ، متن پاسخ، شناسه و revision مدل معلم، تنظیمات تولید، dtype و شناسهٔ نمونه ذخیره می‌شود. این فایل آرشیو کامل و منبع اصلی است. اسکریپت `scripts/prepare_teacher_archive.py` آن را اعتبارسنجی می‌کند و نماهای جداگانهٔ train/eval می‌سازد؛ فقط زیرمجموعهٔ محدود train وارد پایلوت می‌شود و همهٔ آرشیو مستقیماً آموزش داده نمی‌شود. آرشیو برای بازآموزی‌های آینده نگه داشته می‌شود. نوت‌بوک فقط پایلوت لایهٔ صفر را اجرا می‌کند و آموزش همهٔ لایه‌ها را خودکار آغاز نمی‌کند.
+نوت‌بوک‌های \`01\` و \`03\` و اسکریپت‌های activation-distillation ابزارهای پژوهشی قبلی هستند و توسط مسیر اصلی ترکیبی اجرا نمی‌شوند.
 
 ## معماری آزمایشی فعلی
 
