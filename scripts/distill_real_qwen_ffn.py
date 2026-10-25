@@ -106,7 +106,9 @@ def main():
     random.Random(a.seed).shuffle(texts)
     texts = texts[:a.samples]
     tok = AutoTokenizer.from_pretrained(a.model, trust_remote_code=a.trust_remote_code)
-    dtype = (torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16) if device.type == "cuda" else torch.float32
+    # Keep the large base checkpoint near its native low-precision size on CPU too.
+    # FFN activations are captured as FP32 for stable regression; expert weights stay low precision.
+    dtype = (torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16) if device.type == "cuda" else torch.bfloat16
     model = AutoModel.from_pretrained(a.model, torch_dtype=dtype, low_cpu_mem_usage=True,
                                       trust_remote_code=a.trust_remote_code).to(device).eval()
     text_model = get_text_model(model)
