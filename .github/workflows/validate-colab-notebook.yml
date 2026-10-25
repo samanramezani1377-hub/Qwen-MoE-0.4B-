@@ -1,0 +1,66 @@
+name: Validate Google Colab training notebook
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "notebooks/02_colab_chatgpt_text_qwen_logits.ipynb"
+      - ".github/workflows/validate-colab-notebook.yml"
+  pull_request:
+    paths:
+      - "notebooks/02_colab_chatgpt_text_qwen_logits.ipynb"
+      - ".github/workflows/validate-colab-notebook.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-colab-notebook:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate notebook JSON and required training path
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("notebooks/02_colab_chatgpt_text_qwen_logits.ipynb")
+          notebook = json.loads(path.read_text(encoding="utf-8"))
+          assert notebook.get("nbformat") == 4, "Expected nbformat 4"
+          cells = notebook.get("cells")
+          assert isinstance(cells, list) and cells, "Notebook must contain cells"
+
+          source = []
+          for i, cell in enumerate(cells):
+              assert cell.get("cell_type") in {"markdown", "code", "raw"}, f"Invalid cell type at {i}"
+              body = cell.get("source", "")
+              if isinstance(body, list):
+                  body = "".join(body)
+              assert isinstance(body, str), f"Invalid source in cell {i}"
+              source.append(body)
+
+          text = "\n".join(source)
+          required = [
+              "Qwen/Qwen3.5-2B",
+              "capture_qwen_logits_for_chatgpt_data.py",
+              "train_moe_chatgpt_qwen_kd.py",
+              "torch.cuda.is_available()",
+              "google.colab",
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit(f"Colab notebook is missing expected training components: {missing}")
+
+          print(f"Notebook structure valid: {len(cells)} cells")
+          print("Combined text + teacher-logit KD path and GPU preflight markers found.")
+          print("This workflow validates the notebook only; it does not allocate or run a Colab GPU.")
+          PY
