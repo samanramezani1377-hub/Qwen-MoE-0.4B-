@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "scripts/**"
+      - "data/**"
       - "docs/**"
       - "notebooks/**"
       - "README-project.md"
       - ".github/workflows/qwen-moe-pipeline.yml"
+      - "notebooks/02_colab_chatgpt_text_qwen_logits.ipynb"
   # Training is performed in Google Colab for now. The GitHub training jobs
   # are retained for future use, but require an explicit manual opt-in.
   workflow_dispatch:
@@ -37,7 +39,19 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile project scripts
-        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py scripts/collect_persian_corpus.py scripts/split_persian_corpus.py scripts/validate_moe_experiment.py scripts/sweep_moe_budgets.py scripts/evaluate_model_outputs.py scripts/distill_all_qwen_ffn_layers.py scripts/moe_runtime.py scripts/validate_checkpoint_set.py scripts/evaluate_full_model.py scripts/load_moe_model.py scripts/package_moe_adapter.py scripts/benchmark_moe_generation.py
+        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py scripts/collect_persian_corpus.py scripts/split_persian_corpus.py scripts/validate_moe_experiment.py scripts/sweep_moe_budgets.py scripts/evaluate_model_outputs.py scripts/distill_all_qwen_ffn_layers.py scripts/moe_runtime.py scripts/validate_checkpoint_set.py scripts/evaluate_full_model.py scripts/load_moe_model.py scripts/package_moe_adapter.py scripts/benchmark_moe_generation.py scripts/capture_qwen_logits_for_chatgpt_data.py scripts/train_moe_chatgpt_qwen_kd.py scripts/validate_chatgpt_archive.py
+
+  validate-hybrid-training-data:
+    name: Validate hybrid training JSONL
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate dataset schema and uniqueness
+        run: python scripts/validate_chatgpt_archive.py
 
   synthetic-moe:
     name: Synthetic MoE correctness
