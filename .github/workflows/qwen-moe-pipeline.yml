@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile project scripts
-        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py scripts/collect_persian_corpus.py scripts/split_persian_corpus.py scripts/validate_moe_experiment.py scripts/sweep_moe_budgets.py
+        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py scripts/collect_persian_corpus.py scripts/split_persian_corpus.py scripts/validate_moe_experiment.py scripts/sweep_moe_budgets.py scripts/evaluate_model_outputs.py
 
   synthetic-moe:
     name: Synthetic MoE correctness
@@ -137,7 +137,7 @@ jobs:
           python scripts/distill_real_qwen_ffn.py \
             --text-file data/fa_smoke.txt \
             --layer 0 --samples 4 --max-length 16 \
-            --num-experts 8 --top-k 2 --epochs 1 \
+            --num-experts 32 --top-k 2 --epochs 1 \
             --batch-size 1 --device cpu \
             --benchmark-warmup 1 --benchmark-repeats 3 \
             --output artifacts/layer0_top2_smoke.pt
@@ -207,7 +207,7 @@ jobs:
           python scripts/distill_real_qwen_ffn.py \
             --text-file data/fa_train_documents.txt \
             --layer 0 --samples 64 --max-length 96 \
-            --num-experts 8 --top-k 2 --epochs 2 \
+            --num-experts 32 --top-k 2 --epochs 2 \
             --batch-size 1 --device cpu \
             --benchmark-warmup 3 --benchmark-repeats 12 \
             --output artifacts/layer0_persian_top2_experiment.pt
@@ -220,9 +220,9 @@ jobs:
             --checkpoint artifacts/layer0_persian_top2_experiment.pt \
             --eval-text-file data/fa_eval_documents.txt \
             --output artifacts/layer0_persian_validation_report.json \
-            --layer 0 --max-length 96 --batch-size 2 --num-experts 8 --top-k 2 \
+            --layer 0 --max-length 96 --batch-size 2 --num-experts 32 --top-k 2 \
             --device cpu --warmup 3 --repeats 12
-      - name: Compare 8/16/32/48 experts on the same held-out Persian documents
+      - name: Evaluate the selected 32-expert top-2 budget on held-out Persian documents
         env:
           TOKENIZERS_PARALLELISM: "false"
           HF_HUB_DISABLE_TELEMETRY: "1"
@@ -231,10 +231,21 @@ jobs:
             --train-text-file data/fa_train_documents.txt \
             --eval-text-file data/fa_eval_documents.txt \
             --output artifacts/active_budget_sweep.json \
-            --layer 0 --experts 8,16,32,48 --top-k 4 \
+            --layer 0 --experts 32 --top-k 2 \
             --max-length 96 --max-train-token-vectors 1024 \
             --max-eval-token-vectors 2048 --epochs 2 --train-batch-size 32 \
             --device cpu --benchmark-repeats 3
+      - name: Compare dense model outputs with the selected layer-0 top-2/32-expert replacement
+        env:
+          TOKENIZERS_PARALLELISM: "false"
+          HF_HUB_DISABLE_TELEMETRY: "1"
+        run: |
+          python scripts/evaluate_model_outputs.py \\
+            --checkpoint artifacts/layer0_persian_top2_experiment.pt \\
+            --eval-text-file data/fa_eval_documents.txt \\
+            --output artifacts/model_output_comparison.json \\
+            --layer 0 --num-experts 32 --top-k 2 --max-length 96 \\
+            --max-documents 8 --max-new-tokens 16 --device cpu
       - name: Upload Persian experiment and active-budget sweep
         uses: actions/upload-artifact@v4
         with:
@@ -244,6 +255,7 @@ jobs:
             artifacts/layer0_persian_top2_experiment.benchmark.json
             artifacts/layer0_persian_validation_report.json
             artifacts/active_budget_sweep.json
+            artifacts/model_output_comparison.json
             data/fa_persian_corpus.manifest.json
             data/fa_document_split.manifest.json
           if-no-files-found: error
@@ -297,6 +309,7 @@ jobs:
           cp downloaded-persian-artifact/artifacts/layer0_persian_top2_experiment.benchmark.json hf-model/experiments/layer0_persian_top2_experiment.benchmark.json
           cp downloaded-persian-artifact/artifacts/layer0_persian_validation_report.json hf-model/experiments/layer0_persian_validation_report.json
           cp downloaded-persian-artifact/artifacts/active_budget_sweep.json hf-model/experiments/active_budget_sweep.json
+          cp downloaded-persian-artifact/artifacts/model_output_comparison.json hf-model/experiments/model_output_comparison.json
           cp downloaded-persian-artifact/data/fa_persian_corpus.manifest.json hf-model/experiments/persian_corpus.manifest.json
           cp downloaded-persian-artifact/data/fa_document_split.manifest.json hf-model/experiments/persian_document_split.manifest.json
           cat > hf-model/experiments/README.md <<'EOF'
