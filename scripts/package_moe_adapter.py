@@ -38,7 +38,13 @@ def main():
     if check.returncode:
         print(check.stdout)
         raise SystemExit("Checkpoint validation failed; package was not created.")
-    files = sorted(a.checkpoint_dir.glob(f"layer_*_top{a.top_k}_{a.num_experts}experts.pt"))\n    first_payload = __import__("torch").load(files[0], map_location="cpu", weights_only=False)\n    checkpoint_revision = first_payload.get("teacher_revision")\n    if not checkpoint_revision:\n        raise SystemExit("Checkpoint has no immutable teacher_revision; regenerate checkpoints.")\n    if a.model_revision and a.model_revision != checkpoint_revision:\n        raise SystemExit(f"Requested revision {a.model_revision} does not match checkpoint revision {checkpoint_revision}")
+    files = sorted(a.checkpoint_dir.glob(f"layer_*_top{a.top_k}_{a.num_experts}experts.pt"))
+    first_payload = __import__("torch").load(files[0], map_location="cpu", weights_only=False)
+    checkpoint_revision = first_payload.get("teacher_revision")
+    if not checkpoint_revision:
+        raise SystemExit("Checkpoint has no immutable teacher_revision; regenerate checkpoints.")
+    if a.model_revision and a.model_revision != checkpoint_revision:
+        raise SystemExit(f"Requested revision {a.model_revision} does not match checkpoint revision {checkpoint_revision}")
     out = a.output_dir
     out.mkdir(parents=True,exist_ok=True)
     target = out / "checkpoints"
