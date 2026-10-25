@@ -55,7 +55,7 @@ jobs:
           cp ./*.py "$BUNDLE_DIR/" 2>/dev/null || true
           cat > "$BUNDLE_DIR/dataset-metadata.json" <<'JSON'
           {
-            "title": "Qwen MoE Training Source Bundle",
+            "title": "Qwen MoE Training Source",
             "id": "samanramezani/qwen-moe-training-source",
             "licenses": [{"name": "CC0-1.0"}]
           }
