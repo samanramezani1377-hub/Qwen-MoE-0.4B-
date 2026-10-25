@@ -8,6 +8,7 @@
 
 آموزش مدل فعلاً در **Google Colab** انجام می‌شود؛ GitHub Actions برای آموزش و همگام‌سازی آزمایش‌ها به‌صورت پیش‌فرض غیرفعال شده است. Workflow و کدهای آن حذف نشده‌اند و با opt-in دستی می‌توان مسیر آزمایشی قدیمی را در آینده دوباره فعال کرد.
 
+- [نوت‌بوک Colab آموزش ترکیبی: ۵۰۰هزار توکن فارسی + ۵۰۰هزار توکن تولیدشده توسط معلم](notebooks/01_colab_combined_raw_teacher_distillation.ipynb) — تولید معلم قابل ادامه، ذخیره روی Drive و پایلوت فقط لایهٔ صفر.
 - [Notebook آموزش همهٔ FFNها در Colab](notebooks/03_colab_full_layer_distillation.ipynb)
 - [اسکریپت تقطیر یک FFN](scripts/distill_real_qwen_ffn.py)
 - [اسکریپت تقطیر همهٔ FFNها](scripts/distill_all_qwen_ffn_layers.py)
@@ -17,6 +18,10 @@
 - [تولید متن با overlay آزمایشی](scripts/load_moe_model.py)
 - [بسته‌بندی checkpointها با hash و manifest](scripts/package_moe_adapter.py)
 - [بنچمارک سرتاسری تولید و حافظه](scripts/benchmark_moe_generation.py)
+
+## برنامهٔ داده و تقطیر ترکیبی
+
+نوت‌بوک ترکیبی، تا سقف ۵۰۰٬۰۰۰ توکن متن فارسی واقعی و ۵۰۰٬۰۰۰ توکن ادامهٔ تولیدشده توسط مدل معلم را آماده می‌کند. تولید معلم روی Google Drive قابل ادامه است تا قطع runtime باعث از دست رفتن پیشرفت نشود. این دادهٔ تولیدشده فعلاً برای تقطیر activation در مسیر FFN استفاده می‌شود؛ **تقطیر مستقیم logits یا SFT کامل پیاده‌سازی نشده است**. نوت‌بوک فقط پایلوت لایهٔ صفر را اجرا می‌کند و آموزش همهٔ لایه‌ها را خودکار آغاز نمی‌کند.
 
 ## معماری آزمایشی فعلی
 
