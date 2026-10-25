@@ -91,7 +91,7 @@ def main():
                                                 num_experts=a.num_experts, top_k=a.top_k,
                                                 map_location="cpu")
     converted = evaluate(model, tokenizer, texts, device, a.max_length, teacher_top_ids)
-    report = {"status": "evaluation_completed", "model_id": a.model, "device": str(device),
+    report = {"status": "evaluation_completed", "model_id": a.model, "teacher_revision": revision, "device": str(device),
               "checkpoint_dir": str(a.checkpoint_dir), "documents": len(texts),
               "max_length": a.max_length, "num_experts": a.num_experts, "top_k": a.top_k,
               "teacher": teacher, "converted": converted,
