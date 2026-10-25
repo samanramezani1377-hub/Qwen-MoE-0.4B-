@@ -13,7 +13,7 @@
 4. `scripts/validate_checkpoint_set.py` تعداد/shape/metadata هر 24 checkpoint را بررسی می‌کند و مدل/نسخهٔ معلم ناسازگار را رد می‌کند.
 5. `scripts/moe_runtime.py` جایگزینی سخت‌گیرانهٔ FFNهای 24 لایه را برای ارزیابی درون‌فرایندی فراهم می‌کند.
 6. `scripts/evaluate_full_model.py` perplexity، cross-entropy و توافق توکن بعدی معلم و مدل تبدیل‌شده را روی اسناد مستقل اندازه می‌گیرد.
-7. `scripts/load_moe_model.py` برای تست تولید متن و `scripts/package_moe_adapter.py` برای ساخت overlay دارای hash و manifest اضافه شده‌اند.
+7. `scripts/load_moe_model.py` برای تست تولید متن، `scripts/package_moe_adapter.py` برای ساخت overlay دارای hash و manifest، و `scripts/benchmark_moe_generation.py` برای اندازه‌گیری latency/throughput و حافظه اضافه شده‌اند.
 8. Notebook Colab اکنون train/eval را در سطح سند جدا می‌کند، checkpointها را اعتبارسنجی می‌کند، ارزیابی سرتاسری انجام می‌دهد و بستهٔ overlay را می‌سازد.
 
 ## وضعیت‌هایی که هنوز تکمیل یا اثبات نشده‌اند
@@ -28,5 +28,5 @@
 ```bash
 python scripts/validate_checkpoint_set.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --layers 24 --num-experts 32 --top-k 2
 python scripts/evaluate_full_model.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --text-file /content/drive/MyDrive/qwen-moe-full-build/fa_eval.txt --output /content/full_model_eval.json --device auto
-python scripts/package_moe_adapter.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --output-dir /content/qwen-moe-overlay --model Qwen/Qwen3.5-2B --layers 24 --num-experts 32 --top-k 2
+python scripts/package_moe_adapter.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --output-dir /content/qwen-moe-overlay --model Qwen/Qwen3.5-2B --layers 24 --num-experts 32 --top-k 2\npython scripts/benchmark_moe_generation.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --new-tokens 64 --repeats 3 --num-experts 32 --top-k 2 --device auto
 ```
