@@ -75,7 +75,7 @@ def main():
     p.add_argument("--eval-text-file", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--layer", type=int, default=0)
-    p.add_argument("--experts", default="8,16,32,48")
+    p.add_argument("--experts", default="32")
     p.add_argument("--top-k", type=int, default=2)
     p.add_argument("--max-length", type=int, default=96)
     p.add_argument("--batch-docs", type=int, default=2)
