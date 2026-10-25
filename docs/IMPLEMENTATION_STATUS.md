@@ -1,33 +1,33 @@
-# وضعیت پیاده‌سازی Qwen MoE (به‌روزرسانی 2026-10-25)
+# وضعیت پیاده‌سازی Qwen MoE (2026-10-25)
 
-## تصمیم معماری تثبیت‌شده
-- مدل مرجع: Qwen/Qwen3.5-2B.
-- 24 لایهٔ متن، FFN کانال‌شاردشده به 32 expert با عرض 192 و Top-2.
-- هدف تقریبی پارامتر فعال: 1.1B؛ اولویت حفظ استدلال و کیفیت پاسخ.
-- آموزش مدل در Google Colab است. آموزش GitHub Actions حذف نشده، اما jobهای آموزش/همگام‌سازی همچنان opt-in دستی می‌خواهند.
+## تصمیم‌های جاری
 
-## تغییرات ثبت‌شده در ریپو
-1. جداسازی سندی مشترک برای train/eval در تمام لایه‌ها حفظ شده است.
-2. اسکریپت تمام‌لایه‌ها Router را با یک warm-start مبتنی بر برچسب‌های greedy آموزش می‌دهد: انتخاب اکسپرت‌هایی که طبق کاهش خطای مربعی، خروجی FFN معلم را بهتر تقریب می‌زنند؛ سپس آموزش مشترک MSE و loss توازن انجام می‌شود. این heuristic است، نه تضمین کیفیت.
-3. برای هر checkpoint، revision معلم، شمارش استفادهٔ اکسپرت‌ها، اکسپرت‌های بدون استفاده و entropy مسیریابی ذخیره می‌شود.
-4. `scripts/validate_checkpoint_set.py` تعداد/shape/metadata هر 24 checkpoint را بررسی می‌کند و مدل/نسخهٔ معلم ناسازگار را رد می‌کند.
-5. `scripts/moe_runtime.py` جایگزینی سخت‌گیرانهٔ FFNهای 24 لایه را برای ارزیابی درون‌فرایندی فراهم می‌کند.
-6. `scripts/evaluate_full_model.py` perplexity، cross-entropy و توافق توکن بعدی معلم و مدل تبدیل‌شده را روی اسناد مستقل اندازه می‌گیرد.
-7. `scripts/load_moe_model.py` برای تست تولید متن، `scripts/package_moe_adapter.py` برای ساخت overlay دارای hash و manifest، و `scripts/benchmark_moe_generation.py` برای اندازه‌گیری latency/throughput و حافظه اضافه شده‌اند.
-8. Notebook Colab اکنون train/eval را در سطح سند جدا می‌کند، checkpointها را اعتبارسنجی می‌کند، ارزیابی سرتاسری انجام می‌دهد و بستهٔ overlay را می‌سازد.
+- مدل pretrained مرجع: `Qwen/Qwen3.5-2B`; مدل از صفر آموزش داده نمی‌شود.
+- وزن‌های backbone ثابت می‌مانند؛ فقط expertها و routerهای FFN در مسیر آموزش واحد train می‌شوند.
+- مسیر آموزش واحد: `text cross-entropy + 0.5 × sparse teacher-logit KD`.
+- قبل از ساخت expertها، وزن‌ها و فعال‌سازی‌های واقعی FFN تحلیل می‌شوند؛ checkpointهای قبلیِ کانال‌شاردشده نباید initialization این مسیر باشند.
+- 32 expert با عرض 192 و top-2 یعنی حدود 56.6M پارامتر فعال FFN، نه 86M کل مدل. کل مسیر فعال all-in همچنان حدود 1.09B است، چون اجزای dense باقی می‌مانند.
+- GPU/Colab باید از طرف کاربر در دسترس باشد؛ هیچ اجرای واقعی در این نشست ادعا نشده است.
 
-## وضعیت‌هایی که هنوز تکمیل یا اثبات نشده‌اند
-- آموزش واقعی مدل در Colab در این تغییرات اجرا نشده است؛ بنابراین هیچ نتیجهٔ کیفیتی یا checkpoint کامل جدیدی ادعا نمی‌شود.
-- کد runtime و اسکریپت‌های تازه باید در اجرای واقعی Colab و با نسخهٔ Transformers مورد استفاده تست شوند؛ وضعیت GitHub Actions هنگام ثبت این سند در حال اجرا/انتظار بوده است.
-- این overlay شامل وزن‌های پایهٔ Qwen نیست؛ برای اجرا باید مدل پایه جداگانه دریافت شود. هنوز یک بستهٔ مستقل Transformers با `AutoModel`/ `auto_map` ساخته نشده است.
-- روش dispatch فعلی برای صحت پژوهشی است و همهٔ expertها را بررسی می‌کند؛ سرعت اندروید بهینه نشده است.
-- ارزیابی perplexity و توافق توکن، ارزیابی کامل استدلال نیست. مجموعهٔ مستقل استدلال فارسی، آزمون طولانی‌متن، quantization و benchmark واقعی Android/ARM64 هنوز لازم‌اند.
-- مدل نهایی نباید تا زمانی که کیفیت مستقل و آزمون موبایل قابل‌قبول نیست، «آمادهٔ انتشار» معرفی شود.
+## تغییرات ثبت‌شده در GitHub
 
-## دستورهای پس از آموزش در Colab
-```bash
-python scripts/validate_checkpoint_set.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --layers 24 --num-experts 32 --top-k 2
-python scripts/evaluate_full_model.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --text-file /content/drive/MyDrive/qwen-moe-full-build/fa_eval.txt --output /content/full_model_eval.json --device auto
-python scripts/package_moe_adapter.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --output-dir /content/qwen-moe-overlay --model Qwen/Qwen3.5-2B --layers 24 --num-experts 32 --top-k 2
-python scripts/benchmark_moe_generation.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --new-tokens 64 --repeats 3 --num-experts 32 --top-k 2 --device auto
-```
+1. `scripts/analyze_expert_channels.py`: وزن‌های gate/up/down و خلاصهٔ فعال‌سازی gate/up را برای متن کالیبراسیون می‌خواند و برای هر لایه گروه‌های کانال متوازن و تکرارپذیر تولید می‌کند.
+2. `scripts/distill_real_qwen_ffn.py`: تابع ساخت MoE حالا گروه‌های کانال غیرمتوالی را می‌پذیرد، به شرط آنکه همهٔ کانال‌های اصلی دقیقاً یک بار و با عرض مساوی پوشش داده شوند.
+3. `scripts/build_moe_initial_checkpoints.py`: checkpointهای اولیه را از همان revision ثابت مدل pretrained و طرح تحلیل‌شده می‌سازد؛ این مرحله آموزش نیست.
+4. `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb`: ابتدا checkpointهای قدیمیِ مشخص‌شده را فقط در صورت یافتن دقیق 24 فایل لایهٔ 00 تا 23 پاک می‌کند؛ سپس train/holdout پایدار می‌سازد، تحلیل و initialization را اجرا می‌کند، logits را با revision ثابت می‌گیرد و مسیر KD واحد را اجرا می‌کند.
+5. نوت‌بوک پس از آموزش، اعتبارسنجی ساختاری و ارزیابی perplexity/cross-entropy/توافق توکن را روی holdout مستقل انجام می‌دهد. ساخت overlay فقط وقتی اجرا می‌شود که guardrailهای گزارش‌شده پاس شوند.
+6. `docs/ANALYSIS_FIRST_MOE_PLAN.md` تعریف دقیق بودجه و محدودیت‌های روش را ثبت می‌کند.
+
+## هنوز اجرا یا اثبات نشده
+
+- حذف واقعی فایل‌های Google Drive در این نشست انجام نشده؛ کد پاک‌سازی داخل نوت‌بوک آماده است و تا اجرای آن در Colab نمی‌توان گفت فایل‌ها حذف شده‌اند.
+- اسکریپت‌های تازه هنوز در یک runtime واقعی Colab اجرا و تست انتها‌به‌انتها نشده‌اند.
+- خوشه‌بندی وزن/فعال‌سازی یک روش ساختارمند برای گروه‌بندی کانال‌هاست؛ تخصص معنایی expertها را تضمین نمی‌کند.
+- KD از top-k logits به همراه tail تجمیع‌شده استفاده می‌کند؛ KL دقیق روی کل واژگان نیست.
+- holdout perplexity و next-token agreement به‌تنهایی حفظ استدلال فارسی را ثابت نمی‌کنند. هنوز آزمون استدلال فارسی مستقل، طولانی‌متن، quantization و benchmark روی Android/ARM64 لازم است.
+- overlay شامل وزن‌های پایهٔ Qwen نیست و بستهٔ مستقل Transformers یا runtime موبایل محسوب نمی‌شود.
+- هیچ checkpoint آموزش‌دیدهٔ جدید، نتیجهٔ کیفیت یا سرعت موبایل در این commitها ادعا نمی‌شود.
+
+## اجرای نوت‌بوک
+
+از `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb` استفاده کن. قبل از اجرای کامل، runtime باید GPU داشته باشد و Drive mount شود. مسیر خروجی جدید زیر `MyDrive/qwen-moe-chatgpt-logits/` قرار می‌گیرد؛ مسیر قدیمی `MyDrive/qwen-moe-full-build/checkpoints/` فقط برای پاک‌سازی محدود فایل‌های قدیمی استفاده می‌شود.
