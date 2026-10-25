@@ -82,10 +82,13 @@ def benchmark_ffn_vs_moe(ffn: nn.Module, moe: nn.Module, samples: torch.Tensor,
                 replacement["median_ms_per_batch"] / base["median_ms_per_batch"], 4
             ) if base["median_ms_per_batch"] else None,
         })
-        route_counts = getattr(moe, "last_route_counts", route_counts)
         progress("benchmark_batch_complete", batch_tokens=batch_size,
                  original_tokens_per_second=base_tps, moe_tokens_per_second=moe_tps,
                  moe_over_ffn_throughput_ratio=results[-1]["moe_over_ffn_throughput_ratio"])
+    route_batch = samples[:min(128, n)].to(device=device, dtype=ffn_dtype)
+    with torch.inference_mode():
+        _, route_indices = torch.topk(moe.router(route_batch.float()), moe.top_k, dim=-1)
+        route_counts = torch.bincount(route_indices.reshape(-1), minlength=moe.num_experts).cpu().tolist()
     return {
         "benchmark_type": "single_ffn_layer_forward_only",
         "device": str(device),
@@ -155,9 +158,6 @@ def make_moe_from_ffn(ffn: nn.Module, num_experts: int, top_k: int) -> nn.Module
                     expert_in = flat.index_select(0, token_ids).to(dtype=expert_dtype)
                     expert_out = expert(expert_in).to(dtype=flat.dtype)
                     output = output.index_add(0, token_ids, expert_out * weights[token_ids, slots].unsqueeze(-1))
-            self.last_route_counts = torch.bincount(
-                top_indices.reshape(-1), minlength=self.num_experts
-            ).detach().cpu().tolist()
             return output.reshape(shape)
     return TopKMoE()
 
