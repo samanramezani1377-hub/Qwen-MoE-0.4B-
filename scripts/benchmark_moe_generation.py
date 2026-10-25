@@ -35,8 +35,11 @@ def main():
     if a.device=="cuda" and not torch.cuda.is_available(): p.error("CUDA requested but unavailable")
     device=torch.device("cuda" if a.device=="cuda" or (a.device=="auto" and torch.cuda.is_available()) else "cpu")
     dtype=(torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16) if device.type=="cuda" else torch.float32
-    tokenizer=AutoTokenizer.from_pretrained(a.model)
-    model=AutoModelForCausalLM.from_pretrained(a.model,torch_dtype=dtype,low_cpu_mem_usage=True).to(device).eval()
+    first_checkpoint=torch.load(sorted(a.checkpoint_dir.glob(f"layer_*_top{a.top_k}_{a.num_experts}experts.pt"))[0],map_location="cpu",weights_only=False)
+    revision=first_checkpoint.get("teacher_revision")
+    if not revision: raise RuntimeError("Checkpoint has no immutable teacher_revision; regenerate checkpoints.")
+    tokenizer=AutoTokenizer.from_pretrained(a.model,revision=revision)
+    model=AutoModelForCausalLM.from_pretrained(a.model,revision=revision,torch_dtype=dtype,low_cpu_mem_usage=True).to(device).eval()
     patch=patch_model_with_checkpoints(model,a.checkpoint_dir,expected_layers=24,num_experts=a.num_experts,top_k=a.top_k)
     inputs=tokenizer(a.prompt,return_tensors="pt").to(device)
     if device.type=="cuda": torch.cuda.reset_peak_memory_stats(device)
