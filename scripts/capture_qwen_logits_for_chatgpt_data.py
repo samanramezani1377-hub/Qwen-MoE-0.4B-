@@ -163,8 +163,8 @@ def main() -> int:
                 scaled_logits = answer_logits.float() / args.temperature
                 teacher_logsumexp = torch.logsumexp(scaled_logits, dim=-1)
                 values, indices = torch.topk(scaled_logits, k=actual_k, dim=-1)
-                # Keep sparse logits, not normalized probabilities; consumers can apply
-                # temperature/log-softmax after loading. Store target token IDs separately.
+                # Store temperature-scaled top-k logits plus the full-vocabulary log-normalizer.
+                # The trainer uses both to recover top-k probabilities and aggregated tail mass.
                 payload = {
                     "topk_token_ids": indices.to(device="cpu", dtype=torch.int32),
                     "topk_logits": values.to(device="cpu", dtype=torch.float32),
