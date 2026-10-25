@@ -42,6 +42,33 @@ jobs:
           print(f"Normalized cell IDs in {notebook_path}")
           PY
 
+      - name: Package repository source as a private Kaggle dataset
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN || secrets.kaggle }}
+        run: |
+          set -euo pipefail
+          export KAGGLE_API_TOKEN
+          BUNDLE_DIR="$RUNNER_TEMP/qwen-moe-training-source"
+          mkdir -p "$BUNDLE_DIR/data" "$BUNDLE_DIR/scripts"
+          cp data/chatgpt_prompt_response_archive_part2.jsonl "$BUNDLE_DIR/data/"
+          cp scripts/*.py "$BUNDLE_DIR/scripts/"
+          cp ./*.py "$BUNDLE_DIR/" 2>/dev/null || true
+          cat > "$BUNDLE_DIR/dataset-metadata.json" <<'JSON'
+          {
+            "title": "Qwen MoE Training Source Bundle",
+            "id": "samanramezani/qwen-moe-training-source",
+            "licenses": [{"name": "CC0-1.0"}]
+          }
+          JSON
+          if kaggle datasets create -p "$BUNDLE_DIR" --dir-mode zip; then
+            echo "Created private Kaggle source dataset."
+          elif kaggle datasets status samanramezani/qwen-moe-training-source >/dev/null 2>&1; then
+            kaggle datasets version -p "$BUNDLE_DIR" -m "Refresh source bundle from GitHub commit $GITHUB_SHA" --dir-mode zip
+          else
+            echo "::error::Could not create or update the Kaggle source dataset. Check Kaggle API permissions and dataset slug."
+            exit 1
+          fi
+
       - name: Push notebook to Kaggle and start GPU execution
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN || secrets.kaggle }}
