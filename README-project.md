@@ -46,3 +46,10 @@
 ## Validation after the first MoE distillation run
 
 The unified workflow splits whole Persian documents before tokenization and runs `scripts/validate_moe_experiment.py` against held-out documents. It records relative/normalized errors, zero-output and random-router baselines, repeated layer timing, process memory, and a measured text-backbone parameter inventory plus a clearly labelled all-layer MoE estimate. The 0.4B target is reported separately for transformer-core active parameters and the full-vocabulary logits projection; it is not assumed to be achievable. See `docs/INDEPENDENT_MOE_VALIDATION.md`.
+
+
+## Active-parameter budget sweep (in progress)
+
+The unified workflow now runs `scripts/sweep_moe_budgets.py` after the document-level Persian split. It compares 8, 16, 32 and 48 channel-sharded experts with top-2 routing, using the same train documents and held-out documents for every variant. To keep the free CPU experiment bounded, it caps training/evaluation token vectors and trains only the real layer-0 FFN; it loads the base checkpoint once per sweep. The report is `experiments/active_budget_sweep.json`.
+
+The sweep reports actual parameter counts from the loaded text backbone, a hypothetical all-layer active-core estimate, the full logits projection separately, held-out FFN-output MSE/relative-L2/cosine similarity, and single-layer throughput. These metrics compare imitation of one dense FFN, **not** full language generation, reasoning, or Android performance. The 450M/400M targets are not assumed reachable by increasing expert count alone: the measured non-FFN core is a lower bound under this particular design. Architecture changes beyond FFN sharding may be required if that floor exceeds a target.
