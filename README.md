@@ -55,9 +55,10 @@
 
 ## مسیر جدید: دادهٔ متنی ChatGPT + logits معلم Qwen
 
-- [نوت‌بوک Colab: آرشیو متن ChatGPT و استخراج logits از Qwen](notebooks/02_colab_chatgpt_text_qwen_logits.ipynb)
+- [نوت‌بوک Colab: آموزش واحد متن ChatGPT + logits معلم Qwen](notebooks/02_colab_chatgpt_text_qwen_logits.ipynb)
 - [اسکریپت استخراج logits توکن‌به‌توکن Qwen](scripts/capture_qwen_logits_for_chatgpt_data.py)
+- [اسکریپت آموزش ترکیبی MoE با CE + sparse KD](scripts/train_moe_chatgpt_qwen_kd.py)
 
-این مسیر مکمل آرشیو قبلی است و داده‌های ChatGPT را از داده‌های تولیدشده توسط Qwen جدا نگه می‌دارد. ورودی JSONL برای هر رکورد به `sample_id`، `prompt` و `chatgpt_response` نیاز دارد. اسکریپت پاسخ ChatGPT را به‌عنوان دنبالهٔ هدف می‌گیرد و logits مدل Qwen را در موقعیت‌های پیش‌بینی همان توکن‌های پاسخ ذخیره می‌کند؛ بنابراین logits ذخیره‌شده متعلق به Qwen است، نه ChatGPT. به‌صورت پیش‌فرض فقط top-64 logits هر موقعیت ذخیره می‌شود تا اندازهٔ فایل کنترل شود؛ این خروجی تقریب sparse است و معادل logits کامل واژگان نیست. برای تقطیر توکنی باید tokenizer/واژگان دانش‌آموز با معلم سازگار باشد و loss، دما، ماسک پاسخ و هم‌ترازی توکن‌ها در مرحلهٔ آموزش به‌درستی پیاده‌سازی شوند.
+این مسیر اکنون یک مسیر واحد برای آموزش ترکیبی دارد: پاسخ‌های متنی ChatGPT برای Cross-Entropy و logits معلم Qwen برای تقطیر sparse در همان حلقهٔ آموزش. اسکریپت `scripts/capture_qwen_logits_for_chatgpt_data.py` ورودی توکن‌شدهٔ دقیق، شناسه‌های توکن هدف، logits برتر و log-normalizer کل واژگان را ذخیره می‌کند. اسکریپت `scripts/train_moe_chatgpt_qwen_kd.py` مدل کامل را با ۲۴ checkpoint اولیهٔ MoE بارگذاری می‌کند، backbone را فریز می‌کند و expertها/routerها را با `text_cross_entropy + kd_weight * sparse_aggregated_tail_KL` آموزش می‌دهد. KL از top-k معلم و یک bucket برای جرم احتمالاتی باقی واژگان استفاده می‌کند؛ تقریب است، نه KL دقیق واژگان کامل.
 
-نوت‌بوک شامل smoke test دو نمونه‌ای پیش از اجرای کامل است. کد و نوت‌بوک به‌صورت static بررسی شده‌اند، اما هنوز در Colab اجرا نشده‌اند؛ ابتدا با چند نمونه و GPU در دسترس آزمایش کن.
+دادهٔ آموزشی روی Google Drive نگهداری می‌شود، نه GitHub: `MyDrive/qwen-moe-chatgpt-logits/chatgpt_prompt_response_archive.jsonl`. خروجی logits در `qwen_logits_output/` و checkpointهای آموزش در `combined_moe_training/checkpoints/` قرار می‌گیرند. نوت‌بوک `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb` یک مسیر کامل و واحد را اجرا می‌کند؛ مقایسهٔ text-only/logits-only یا آزمایش‌های جایگزین اجرا نمی‌شوند. کد به‌صورت static بررسی می‌شود، اما فقط اجرای موفق واقعی در Colab می‌تواند آموزش را تأیید کند.
