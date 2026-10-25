@@ -6,7 +6,7 @@
 
 ## اجرای آموزش
 
-**مسیر اصلی و واحد آموزش متنی فعلی** در Google Colab است: [نوت‌بوک آموزش ترکیبی متن ChatGPT + logits معلم Qwen](notebooks/02_colab_chatgpt_text_qwen_logits.ipynb). این مسیر پاسخ‌های متنی را با Cross-Entropy و سیگنال logits معلم Qwen را با sparse KD در یک حلقهٔ آموزش استفاده می‌کند؛ مسیرهای text-only و logits-only اجرا نمی‌شوند. داده روی Google Drive می‌ماند و GitHub Actions آموزش مدل را اجرا نمی‌کند.
+**مسیر اصلی و واحد آموزش متنی فعلی** در Google Colab است: [نوت‌بوک آموزش ترکیبی متن ChatGPT + logits معلم Qwen](notebooks/02_colab_chatgpt_text_qwen_logits.ipynb). این مسیر پاسخ‌های متنی را با Cross-Entropy و سیگنال logits معلم Qwen را با sparse KD در یک حلقهٔ آموزش استفاده می‌کند؛ مسیرهای text-only و logits-only اجرا نمی‌شوند. آرشیو متنی این نسخه از `data/chatgpt_prompt_response_archive_part2.jsonl` در GitHub خوانده می‌شود؛ خروجی‌های حجیم logits و آموزش و checkpointها همچنان روی Google Drive می‌مانند. GitHub Actions آموزش مدل را اجرا نمی‌کند.
 
 - [نوت‌بوک آموزش ترکیبی واحد](notebooks/02_colab_chatgpt_text_qwen_logits.ipynb)
 - [اسکریپت استخراج logits هم‌تراز با پاسخ](scripts/capture_qwen_logits_for_chatgpt_data.py)
@@ -59,4 +59,4 @@
 
 این مسیر اکنون یک مسیر واحد برای آموزش ترکیبی دارد: پاسخ‌های متنی ChatGPT برای Cross-Entropy و logits معلم Qwen برای تقطیر sparse در همان حلقهٔ آموزش. اسکریپت `scripts/capture_qwen_logits_for_chatgpt_data.py` ورودی توکن‌شدهٔ دقیق، شناسه‌های توکن هدف، logits برتر و log-normalizer کل واژگان را ذخیره می‌کند. اسکریپت `scripts/train_moe_chatgpt_qwen_kd.py` مدل کامل را با ۲۴ checkpoint اولیهٔ MoE بارگذاری می‌کند، backbone را فریز می‌کند و expertها/routerها را با `text_cross_entropy + kd_weight * sparse_aggregated_tail_KL` آموزش می‌دهد. KL از top-k معلم و یک bucket برای جرم احتمالاتی باقی واژگان استفاده می‌کند؛ تقریب است، نه KL دقیق واژگان کامل.
 
-دادهٔ آموزشی روی Google Drive نگهداری می‌شود، نه GitHub: `MyDrive/qwen-moe-chatgpt-logits/chatgpt_prompt_response_archive.jsonl`. خروجی logits در `qwen_logits_output/` و checkpointهای آموزش در `combined_moe_training/checkpoints/` قرار می‌گیرند. نوت‌بوک `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb` یک مسیر کامل و واحد را اجرا می‌کند؛ مقایسهٔ text-only/logits-only یا آزمایش‌های جایگزین اجرا نمی‌شوند. کد به‌صورت static بررسی می‌شود، اما فقط اجرای موفق واقعی در Colab می‌تواند آموزش را تأیید کند.
+آرشیو متنی نسخهٔ فعلی در GitHub نگهداری می‌شود: `data/chatgpt_prompt_response_archive_part2.jsonl` (۷۵ نمونه). نوت‌بوک دیگر برای ورودی متن به `chatgpt_prompt_response_archive.jsonl` روی Drive مراجعه نمی‌کند. خروجی logits در `qwen_logits_output/` و checkpointهای آموزش در `combined_moe_training/checkpoints/` روی Google Drive قرار می‌گیرند؛ چک‌پوینت‌های اولیه نیز در Drive باقی می‌مانند. نوت‌بوک `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb` یک مسیر کامل و واحد را اجرا می‌کند؛ مقایسهٔ text-only/logits-only یا آزمایش‌های جایگزین اجرا نمی‌شوند. کد به‌صورت static بررسی می‌شود، اما فقط اجرای موفق واقعی در Colab می‌تواند آموزش را تأیید کند.
