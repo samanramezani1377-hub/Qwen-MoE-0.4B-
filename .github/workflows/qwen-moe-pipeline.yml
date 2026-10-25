@@ -240,11 +240,11 @@ jobs:
           TOKENIZERS_PARALLELISM: "false"
           HF_HUB_DISABLE_TELEMETRY: "1"
         run: |
-          python scripts/evaluate_model_outputs.py \\
-            --checkpoint artifacts/layer0_persian_top2_experiment.pt \\
-            --eval-text-file data/fa_eval_documents.txt \\
-            --output artifacts/model_output_comparison.json \\
-            --layer 0 --num-experts 32 --top-k 2 --max-length 96 \\
+          python scripts/evaluate_model_outputs.py \
+            --checkpoint artifacts/layer0_persian_top2_experiment.pt \
+            --eval-text-file data/fa_eval_documents.txt \
+            --output artifacts/model_output_comparison.json \
+            --layer 0 --num-experts 32 --top-k 2 --max-length 96 \
             --max-documents 8 --max-new-tokens 16 --device cpu
       - name: Upload Persian experiment and active-budget sweep
         uses: actions/upload-artifact@v4
