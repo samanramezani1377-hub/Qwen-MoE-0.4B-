@@ -157,6 +157,5 @@ jobs:
           fi
           KAGGLE_DIR="$GITHUB_WORKSPACE/kaggle/combined_moe"
           echo "Pushing from: $KAGGLE_DIR"
-          echo "Metadata source: $(python -c 'import json,os; print(json.load(open(os.path.join(os.environ["KAGGLE_DIR"], "kernel-metadata.json")))["code_file"])' 2>/dev/null || true)"
           kaggle kernels push -p "$KAGGLE_DIR" --accelerator NvidiaTeslaT4 --timeout 43200
           echo "Kaggle accepted the notebook push. Training runs on Kaggle, not on this GitHub runner."
