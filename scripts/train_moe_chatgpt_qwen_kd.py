@@ -16,7 +16,7 @@ from typing import Any, Iterator
 
 import torch
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForMultimodalLM
 from transformers.optimization import Adafactor
 
 from moe_runtime import get_text_model, patch_model_with_checkpoints
@@ -246,7 +246,7 @@ def main() -> int:
          revision=revision, device=str(device), dtype=str(dtype), kd_weight=args.kd_weight,
          temperature=args.temperature, method="chatgpt_text_plus_qwen_sparse_logits_kd")
 
-    model = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForMultimodalLM.from_pretrained(
         args.model, revision=revision, torch_dtype=dtype, low_cpu_mem_usage=True,
         trust_remote_code=False,
     ).to(device)
