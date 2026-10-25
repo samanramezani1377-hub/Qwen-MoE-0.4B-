@@ -71,9 +71,13 @@ def main():
     texts = [x.strip() for x in a.text_file.read_text(encoding="utf-8").splitlines() if x.strip()][:a.max_documents]
     if len(texts) < 2:
         raise ValueError("Provide at least two held-out documents; do not use training documents.")
-    tokenizer = AutoTokenizer.from_pretrained(a.model)
+    first_checkpoint = torch.load(sorted(a.checkpoint_dir.glob(f"layer_*_top{a.top_k}_{a.num_experts}experts.pt"))[0], map_location="cpu", weights_only=False)
+    revision = first_checkpoint.get("teacher_revision")
+    if not revision:
+        raise RuntimeError("Checkpoint has no immutable teacher_revision; regenerate checkpoints.")
+    tokenizer = AutoTokenizer.from_pretrained(a.model, revision=revision)
     dtype = get_dtype(device)
-    model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=dtype, low_cpu_mem_usage=True).to(device).eval()
+    model = AutoModelForCausalLM.from_pretrained(a.model, revision=revision, torch_dtype=dtype, low_cpu_mem_usage=True).to(device).eval()
     teacher_top_ids = []
     # Save only argmax token IDs, not full vocabulary logits, to keep memory bounded.
     with torch.inference_mode():
