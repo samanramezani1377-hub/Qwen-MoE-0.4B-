@@ -1,19 +1,7 @@
 name: Persian corpus FFN distillation (CPU experiment)
 
 on:
-  push:
-    paths:
-      - ".github/workflows/persian-wikipedia-distillation.yml"
   workflow_dispatch:
-    inputs:
-      samples:
-        description: "Number of Persian Wikipedia samples (keep small on CPU)"
-        required: true
-        default: "64"
-      epochs:
-        description: "Training epochs"
-        required: true
-        default: "2"
 
 permissions:
   contents: read
