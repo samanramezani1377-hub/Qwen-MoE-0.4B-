@@ -32,8 +32,11 @@ jobs:
           metadata_path = Path("kaggle/combined_moe/kernel-metadata.json")
           data = json.loads(metadata_path.read_text(encoding="utf-8"))
           data["id"] = "samanramezani/qwen-moe-combined-text-qwen-kd"
+          # Always set the source explicitly; Kaggle CLI rejects empty/missing code_file.
+          data["code_file"] = "qwen_moe_combined_text_qwen_kd.ipynb"
           metadata_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
           print("Prepared Kaggle kernel:", data["id"])
+          print("Prepared source file:", data["code_file"])
           notebook_path = Path("kaggle/combined_moe/qwen_moe_combined_text_qwen_kd.ipynb")
           notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
           for index, cell in enumerate(notebook.get("cells", [])):
@@ -87,6 +90,62 @@ jobs:
           print("Embedded compressed source bundle:", len(bundle.getvalue()), "bytes; notebook cell:", len(encoded), "base64 characters")
           PY
 
+      - name: Validate Kaggle metadata and notebook source
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          folder = Path("kaggle/combined_moe").resolve()
+          metadata_path = folder / "kernel-metadata.json"
+          if not metadata_path.is_file():
+              raise SystemExit(f"Missing metadata file: {metadata_path}")
+          metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+          required = ("id", "title", "code_file", "language", "kernel_type")
+          missing = [key for key in required if not str(metadata.get(key, "")).strip()]
+          if missing:
+              raise SystemExit(f"Missing required metadata fields: {missing}")
+          if metadata["language"] not in ("python", "r", "rmarkdown"):
+              raise SystemExit(f"Invalid metadata language: {metadata['language']!r}")
+          if metadata["kernel_type"] not in ("notebook", "script"):
+              raise SystemExit(f"Invalid metadata kernel_type: {metadata['kernel_type']!r}")
+
+          source_path = Path(metadata["code_file"])
+          if not source_path.is_absolute():
+              source_path = folder / source_path
+          if not source_path.is_file():
+              raise SystemExit(
+                  f"Metadata code_file={metadata['code_file']!r} does not resolve to a file: {source_path}"
+              )
+          if source_path.suffix.lower() != ".ipynb":
+              raise SystemExit(f"Expected an .ipynb notebook, got: {source_path.name}")
+
+          notebook = json.loads(source_path.read_text(encoding="utf-8"))
+          if notebook.get("nbformat") != 4 or not isinstance(notebook.get("cells"), list):
+              raise SystemExit("Invalid notebook structure: expected nbformat 4 and a cells list")
+          if not notebook["cells"]:
+              raise SystemExit("Notebook has no cells")
+          for i, cell in enumerate(notebook["cells"]):
+              if cell.get("cell_type") not in ("code", "markdown", "raw"):
+                  raise SystemExit(f"Cell {i} has invalid cell_type: {cell.get('cell_type')!r}")
+              if not isinstance(cell.get("source"), (str, list)):
+                  raise SystemExit(f"Cell {i} has invalid/missing source")
+              if cell["cell_type"] == "code" and not isinstance(cell.get("outputs", []), list):
+                  raise SystemExit(f"Code cell {i} has invalid outputs")
+
+          print("Kaggle preflight passed.")
+          print(json.dumps({
+              "metadata": str(metadata_path),
+              "kernel_id": metadata["id"],
+              "code_file": metadata["code_file"],
+              "resolved_source": str(source_path),
+              "notebook_cells": len(notebook["cells"]),
+              "nbformat": notebook["nbformat"],
+          }, ensure_ascii=False, indent=2))
+          PY
+
       - name: Push notebook to Kaggle and start GPU execution
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN || secrets.kaggle }}
@@ -96,5 +155,8 @@ jobs:
             echo "::error::Repository secret KAGGLE_API_TOKEN or kaggle is missing."
             exit 1
           fi
-          kaggle kernels push -p kaggle/combined_moe --accelerator NvidiaTeslaT4 --timeout 43200
+          KAGGLE_DIR="$GITHUB_WORKSPACE/kaggle/combined_moe"
+          echo "Pushing from: $KAGGLE_DIR"
+          echo "Metadata source: $(python -c 'import json,os; print(json.load(open(os.path.join(os.environ["KAGGLE_DIR"], "kernel-metadata.json")))["code_file"])' 2>/dev/null || true)"
+          kaggle kernels push -p "$KAGGLE_DIR" --accelerator NvidiaTeslaT4 --timeout 43200
           echo "Kaggle accepted the notebook push. Training runs on Kaggle, not on this GitHub runner."
