@@ -36,6 +36,8 @@ def main():
             for idx,row in enumerate(stream):
                 if idx>=a.max_scan or len(rows)>=a.count:
                     break
+                if idx > 0 and idx % 500 == 0:
+                    print(f"Dataset scan progress: {idx}/{a.max_scan} rows scanned; {len(rows)}/{a.count} usable samples collected", flush=True)
                 body=clean(row.get("text"))
                 if len(body)<a.min_chars or row.get("judge_passed") is False:
                     continue
