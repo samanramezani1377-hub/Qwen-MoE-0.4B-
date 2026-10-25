@@ -1,0 +1,38 @@
+name: Static validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python syntax
+        run: python -m compileall -q scripts
+      - name: Validate notebooks are valid JSON
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          notebooks = sorted(Path("notebooks").glob("*.ipynb"))
+          if not notebooks:
+              raise SystemExit("No notebooks found")
+          for path in notebooks:
+              data = json.loads(path.read_text(encoding="utf-8"))
+              if data.get("nbformat") != 4 or not isinstance(data.get("cells"), list):
+                  raise SystemExit(f"Invalid notebook structure: {path}")
+          print(f"Validated {len(notebooks)} notebooks")
+          PY
+      - name: Validate ChatGPT archive
+        run: python scripts/validate_chatgpt_archive.py
