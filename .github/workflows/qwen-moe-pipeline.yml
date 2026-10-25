@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile project scripts
-        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py scripts/collect_persian_corpus.py scripts/split_persian_corpus.py scripts/validate_moe_experiment.py
+        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py scripts/collect_persian_corpus.py scripts/split_persian_corpus.py scripts/validate_moe_experiment.py scripts/sweep_moe_budgets.py
 
   synthetic-moe:
     name: Synthetic MoE correctness
@@ -152,9 +152,9 @@ jobs:
           retention-days: 7
 
   persian-distillation:
-    name: Persian dataset FFN training + speed benchmark
+    name: Persian dataset FFN training + active-budget sweep
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -222,7 +222,20 @@ jobs:
             --output artifacts/layer0_persian_validation_report.json \
             --layer 0 --max-length 96 --batch-size 2 --num-experts 8 --top-k 2 \
             --device cpu --warmup 3 --repeats 12
-      - name: Upload Persian experiment
+      - name: Compare 8/16/32/48 experts on the same held-out Persian documents
+        env:
+          TOKENIZERS_PARALLELISM: "false"
+          HF_HUB_DISABLE_TELEMETRY: "1"
+        run: |
+          python scripts/sweep_moe_budgets.py \
+            --train-text-file data/fa_train_documents.txt \
+            --eval-text-file data/fa_eval_documents.txt \
+            --output artifacts/active_budget_sweep.json \
+            --layer 0 --experts 8,16,32,48 --top-k 2 \
+            --max-length 96 --max-train-token-vectors 1024 \
+            --max-eval-token-vectors 2048 --epochs 2 --train-batch-size 32 \
+            --device cpu --benchmark-repeats 3
+      - name: Upload Persian experiment and active-budget sweep
         uses: actions/upload-artifact@v4
         with:
           name: qwen-persian-ffn-experiment
@@ -230,6 +243,7 @@ jobs:
             artifacts/layer0_persian_top2_experiment.pt
             artifacts/layer0_persian_top2_experiment.benchmark.json
             artifacts/layer0_persian_validation_report.json
+            artifacts/active_budget_sweep.json
             data/fa_persian_corpus.manifest.json
             data/fa_document_split.manifest.json
           if-no-files-found: error
