@@ -51,7 +51,7 @@ def main() -> int:
     parser.add_argument("--revision", default=None, help="Optional pinned Hugging Face revision")
     parser.add_argument("--top-k", type=int, default=64,
                         help="Store top-k logits per answer position (sparse approximation)")
-    parser.add_argument("--max-seq-length", type=int, default=2048)
+    parser.add_argument("--max-seq-length", type=int, default=512)
     parser.add_argument("--max-samples", type=int, default=0,
                         help="0 means all samples; use a small value for smoke tests")
     parser.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
@@ -131,7 +131,7 @@ def main() -> int:
                 # Position i predicts token i+1. Align to answer token positions only.
                 start = len(prefix_ids) - 1
                 end = start + len(answer_ids)
-                answer_logits = outputs.logits[0, start:end, :].float()
+                answer_logits = outputs.logits[0, start:end, :]  # Avoid a full float32 copy of the large vocabulary tensor
                 values, indices = torch.topk(answer_logits, k=actual_k, dim=-1)
                 # Keep sparse logits, not normalized probabilities; consumers can apply
                 # temperature/log-softmax after loading. Store target token IDs separately.
