@@ -42,32 +42,50 @@ jobs:
           print(f"Normalized cell IDs in {notebook_path}")
           PY
 
-      - name: Package repository source as a private Kaggle dataset
-        env:
-          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN || secrets.kaggle }}
+      - name: Embed repository source and training data into notebook
         run: |
           set -euo pipefail
-          export KAGGLE_API_TOKEN
-          BUNDLE_DIR="$RUNNER_TEMP/qwen-moe-training-source"
-          mkdir -p "$BUNDLE_DIR/data" "$BUNDLE_DIR/scripts"
-          cp data/chatgpt_prompt_response_archive_part2.jsonl "$BUNDLE_DIR/data/"
-          cp scripts/*.py "$BUNDLE_DIR/scripts/"
-          cp ./*.py "$BUNDLE_DIR/" 2>/dev/null || true
-          cat > "$BUNDLE_DIR/dataset-metadata.json" <<'JSON'
-          {
-            "title": "Qwen MoE Training Source",
-            "id": "samanramezani/qwen-moe-training-source",
-            "licenses": [{"name": "CC0-1.0"}]
-          }
-          JSON
-          if kaggle datasets create -p "$BUNDLE_DIR" --dir-mode zip; then
-            echo "Created private Kaggle source dataset."
-          elif kaggle datasets status samanramezani/qwen-moe-training-source >/dev/null 2>&1; then
-            kaggle datasets version -p "$BUNDLE_DIR" -m "Refresh source bundle from GitHub commit $GITHUB_SHA" --dir-mode zip
-          else
-            echo "::error::Could not create or update the Kaggle source dataset. Check Kaggle API permissions and dataset slug."
-            exit 1
-          fi
+          python - <<'PY'
+          import base64, io, json, zipfile
+          from pathlib import Path
+
+          root = Path(".")
+          bundle = io.BytesIO()
+          with zipfile.ZipFile(bundle, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              archive.write(root / "data/chatgpt_prompt_response_archive_part2.jsonl",
+                            "Qwen-MoE-0.4B-/data/chatgpt_prompt_response_archive_part2.jsonl")
+              for path in sorted((root / "scripts").glob("*.py")):
+                  archive.write(path, "Qwen-MoE-0.4B-/scripts/" + path.name)
+              for path in sorted(root.glob("*.py")):
+                  archive.write(path, "Qwen-MoE-0.4B-/" + path.name)
+
+          encoded = base64.b64encode(bundle.getvalue()).decode("ascii")
+          bootstrap = (
+              "import base64, io, zipfile\n"
+              "from pathlib import Path\n"
+              "import shutil\n"
+              "_bundle_b64 = " + repr(encoded) + "\n"
+              "_repo = Path('/kaggle/working/Qwen-MoE-0.4B-')\n"
+              "if _repo.exists(): shutil.rmtree(_repo)\n"
+              "_repo.parent.mkdir(parents=True, exist_ok=True)\n"
+              "with zipfile.ZipFile(io.BytesIO(base64.b64decode(_bundle_b64))) as _z: _z.extractall('/kaggle/working')\n"
+              "assert (_repo / 'data/chatgpt_prompt_response_archive_part2.jsonl').is_file(), 'Embedded training dataset extraction failed'\n"
+              "assert any((_repo / 'scripts').glob('*.py')), 'Embedded source extraction failed'\n"
+              "print('Embedded source ready:', _repo, '| dataset bytes:', (_repo / 'data/chatgpt_prompt_response_archive_part2.jsonl').stat().st_size)\n"
+              "del _bundle_b64, _z\n"
+          )
+          path = Path("kaggle/combined_moe/qwen_moe_combined_text_qwen_kd.ipynb")
+          notebook = json.loads(path.read_text(encoding="utf-8"))
+          notebook["cells"].insert(0, {
+              "cell_type": "code",
+              "execution_count": None,
+              "metadata": {},
+              "outputs": [],
+              "source": [line + "\\n" for line in bootstrap.splitlines()]
+          })
+          path.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\\n", encoding="utf-8")
+          print("Embedded compressed source bundle:", len(bundle.getvalue()), "bytes; notebook cell:", len(encoded), "base64 characters")
+          PY
 
       - name: Push notebook to Kaggle and start GPU execution
         env:
