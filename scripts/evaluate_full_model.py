@@ -9,7 +9,7 @@ import argparse, json, math
 from pathlib import Path
 import torch
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForMultimodalLM, AutoTokenizer
 from moe_runtime import patch_model_with_checkpoints
 
 
@@ -77,7 +77,7 @@ def main():
         raise RuntimeError("Checkpoint has no immutable teacher_revision; regenerate checkpoints.")
     tokenizer = AutoTokenizer.from_pretrained(a.model, revision=revision)
     dtype = get_dtype(device)
-    model = AutoModelForCausalLM.from_pretrained(a.model, revision=revision, torch_dtype=dtype, low_cpu_mem_usage=True).to(device).eval()
+    model = AutoModelForMultimodalLM.from_pretrained(a.model, revision=revision, torch_dtype=dtype, low_cpu_mem_usage=True).to(device).eval()
     teacher_top_ids = []
     # Save only argmax token IDs, not full vocabulary logits, to keep memory bounded.
     with torch.inference_mode():
