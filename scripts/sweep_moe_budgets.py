@@ -123,7 +123,7 @@ def main():
     non_ffn_core=body_total-embedding_count-dense_ffn_total
     head_count=int(vocab)*hidden if vocab else None
     tied=getattr(cfg,"tie_word_embeddings",None)
-    del model, text_model, layers, mlps
+    del model, text_model, layers, mlps, embedding
     # Bound the experiment so the variants are comparable and CPU cost is predictable.
     g=torch.Generator().manual_seed(20261025)
     if len(x_train)>a.max_train_token_vectors:
