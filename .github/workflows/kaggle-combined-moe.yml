@@ -38,7 +38,7 @@ jobs:
           notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
           for index, cell in enumerate(notebook.get("cells", [])):
               cell["id"] = f"cell-{index:04d}"
-          notebook_path.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\\n", encoding="utf-8")
+          notebook_path.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
           print(f"Normalized cell IDs in {notebook_path}")
           PY
 
