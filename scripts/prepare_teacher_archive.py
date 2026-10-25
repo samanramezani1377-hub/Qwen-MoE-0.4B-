@@ -147,7 +147,7 @@ def main() -> int:
         "archive_sha256": sha256_file(args.archive),
         "archive_records": len(rows),
         "archive_response_tokens_from_saved_token_ids": total_response_tokens,
-        "duplicate_sample_ids_removed_from_views": len(rows) - len({str(r["sample_id"]) for r in rows}),
+        "duplicate_sample_ids_removed_from_views": 0,
         "duplicate_prompt_response_pairs_excluded_from_views": duplicates,
         "eval_fraction_target": args.eval_fraction,
         "eval_records": len(eval_rows),
