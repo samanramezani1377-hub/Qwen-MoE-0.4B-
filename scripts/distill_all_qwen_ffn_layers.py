@@ -130,12 +130,13 @@ def main() -> int:
     dtype = (torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16) if device.type == "cuda" else torch.bfloat16
     a.output_dir.mkdir(parents=True, exist_ok=True)
     log("loading_teacher", model=a.model, device=str(device), dtype=str(dtype), documents=len(texts))
-    tokenizer = AutoTokenizer.from_pretrained(a.model, trust_remote_code=a.trust_remote_code)
     teacher = AutoModel.from_pretrained(a.model, torch_dtype=dtype, low_cpu_mem_usage=True,
                                         trust_remote_code=a.trust_remote_code).to(device).eval()
     teacher_revision = getattr(getattr(teacher, "config", None), "_commit_hash", None)
     if not teacher_revision:
         raise RuntimeError("Could not resolve the teacher's immutable Hugging Face revision; refusing to create untraceable checkpoints.")
+    tokenizer = AutoTokenizer.from_pretrained(a.model, revision=teacher_revision,
+                                              trust_remote_code=a.trust_remote_code)
     log("teacher_loaded", model=a.model, teacher_revision=teacher_revision)
     text_model = get_text_model(teacher)
     layers = text_model.layers
