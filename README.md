@@ -63,3 +63,14 @@
 این مسیر اکنون یک مسیر واحد برای آموزش ترکیبی دارد: پاسخ‌های متنی ChatGPT برای Cross-Entropy و logits معلم Qwen برای تقطیر sparse در همان حلقهٔ آموزش. اسکریپت `scripts/capture_qwen_logits_for_chatgpt_data.py` ورودی توکن‌شدهٔ دقیق، شناسه‌های توکن هدف، logits برتر و log-normalizer کل واژگان را ذخیره می‌کند. اسکریپت `scripts/train_moe_chatgpt_qwen_kd.py` مدل کامل را با ۲۴ checkpoint اولیهٔ MoE بارگذاری می‌کند، backbone را فریز می‌کند و expertها/routerها را با `text_cross_entropy + kd_weight * sparse_aggregated_tail_KL` آموزش می‌دهد. KL از top-k معلم و یک bucket برای جرم احتمالاتی باقی واژگان استفاده می‌کند؛ تقریب است، نه KL دقیق واژگان کامل.
 
 آرشیو متنی نسخهٔ فعلی در GitHub نگهداری می‌شود: [`data/chatgpt_prompt_response_archive_part2.jsonl`](data/chatgpt_prompt_response_archive_part2.jsonl) (۱٬۲۷۵ نمونه؛ تعداد نهایی را با validator بازبینی کن). اسکریپت `scripts/validate_chatgpt_archive.py` ساختار JSONL، یکتایی شناسه‌ها و نبود رکورد خالی را بررسی می‌کند؛ این بررسی در GitHub Actions نیز اجرا می‌شود. نوت‌بوک دیگر برای ورودی متن به `chatgpt_prompt_response_archive.jsonl` روی Drive مراجعه نمی‌کند. خروجی‌های اجرای جدید با پسوند `_v2` در `MyDrive/qwen-moe-chatgpt-logits/` ذخیره می‌شوند تا با logits/checkpointهای قبلی اشتباه نشوند. نوت‌بوک فقط فایل‌های قدیمی با الگوی دقیق `layer_00_top2_32experts.pt` تا `layer_23_top2_32experts.pt` را از پوشهٔ قدیمی `MyDrive/qwen-moe-full-build/checkpoints/` پاک می‌کند؛ وزن‌های پایه، logits، وضعیت optimizer و فایل‌های دیگر دست‌نخورده می‌مانند. این پاک‌سازی در نشست فعلی اجرا/تأیید نشده است. نوت‌بوک `notebooks/02_colab_chatgpt_text_qwen_logits.ipynb` یک مسیر واحدِ text CE + sparse KD دارد؛ مقایسهٔ text-only/logits-only یا آزمایش‌های جایگزین اجرا نمی‌شوند. workflow اعتبارسنجی ایستا اضافه شده، اما نتیجهٔ اجرای آن در GitHub هنوز تأیید نشده است.
+
+## اجرای مسیر ترکیبی روی Kaggle GPU
+
+اتصال Kaggle API از GitHub Actions تأیید شده است. نوت‌بوک مخصوص Kaggle در مسیر kaggle/combined_moe/ قرار دارد و خروجی‌ها را در /kaggle/working نگه می‌دارد؛ هیچ فایل قدیمی Google Drive را حذف نمی‌کند.
+
+1. به تب [Actions](https://github.com/samanramezani1377-hub/Qwen-MoE-0.4B-/actions/workflows/kaggle-combined-moe.yml) برو و **Run workflow** را بزن.
+2. در فیلد `kaggle_username` نام کاربری پروفایل Kaggle را وارد کن (نه ایمیل و نه توکن).
+3. اجرای workflow نوت‌بوک را آپلود و اجرای Kaggle را شروع می‌کند؛ آموزش روی GPU Kaggle انجام می‌شود و به سهمیه/دسترس‌پذیری GPU وابسته است.
+4. خروجی‌های آموزش و ارزیابی در صفحهٔ Kernel در Kaggle، تب **Output** قابل دریافت‌اند.
+
+نوت‌بوک خصوصی تنظیم شده است. وزن‌های پایه از Hugging Face دریافت می‌شوند. GitHub Actions خودش GPU آموزش فراهم نمی‌کند.
