@@ -166,7 +166,7 @@ def main() -> int:
         eval_cosine = F.cosine_similarity(eval_pred.reshape(1,-1), y_eval.reshape(1,-1)).item()
         out = a.output_dir / f"layer_{idx:02d}_top{a.top_k}_{a.num_experts}experts.pt"
         torch.save({
-            "model_id": a.model, "layer": idx, "hidden_size": int(x_train.shape[-1]),
+            "model_id": a.model, "teacher_revision": teacher_revision, "layer": idx, "hidden_size": int(x_train.shape[-1]),
             "num_experts": a.num_experts, "top_k": a.top_k,
             "tokens_captured": int(total_tokens), "train_tokens": int(len(x_train)),
             "eval_tokens": int(len(x_eval)), "train_documents": len(train_doc_ids),
@@ -187,7 +187,7 @@ def main() -> int:
     )
     manifest = {
         "status": "layer_checkpoints_created",
-        "model_id": a.model, "device": str(device), "dtype": str(dtype),
+        "model_id": a.model, "teacher_revision": teacher_revision, "device": str(device), "dtype": str(dtype),
         "num_layers_in_teacher": len(layers), "last_run_layer_range": [a.start_layer, last_layer],
         "num_experts": a.num_experts, "top_k": a.top_k, "epochs": a.epochs,
         "total_documents": len(texts), "train_documents": len(train_doc_ids),
