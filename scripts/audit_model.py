@@ -101,11 +101,16 @@ def summarize_tensor_headers(files: list[dict[str, Any]], base: str) -> dict[str
                 else:
                     component = "other"
                 by_component[component] += tensor["numel"]
+            ffn_tensors = [
+                tensor for tensor in header["tensors"]
+                if any(part in tensor["name"].lower() for part in ("mlp", "ffn", "feed_forward"))
+            ]
             summaries.append({
                 "file": name,
                 "header_bytes_read": header["header_bytes"],
                 "tensor_count": len(header["tensors"]),
                 "tensor_elements": file_total,
+                "ffn_tensor_shapes": ffn_tensors,
                 "method": "HTTP Range; safetensors header only",
             })
         except Exception as exc:
