@@ -80,6 +80,16 @@ def main() -> int:
     last_layer = len(layers) - 1 if a.end_layer < 0 else a.end_layer
     if not (0 <= a.start_layer <= last_layer < len(layers)):
         p.error(f"Invalid layer range {a.start_layer}..{last_layer}; model has {len(layers)} layers")
+    # Freeze one corpus-level split for every layer. Otherwise a document held out
+    # for layer 0 could leak into training for layer 1 and invalidate end-to-end eval.
+    doc_perm = torch.randperm(len(texts), generator=torch.Generator().manual_seed(a.seed))
+    n_eval_docs = max(1, int(a.eval_fraction * len(doc_perm)))
+    eval_doc_ids = doc_perm[:n_eval_docs].tolist()
+    train_doc_ids = doc_perm[n_eval_docs:].tolist()
+    if not train_doc_ids:
+        p.error("Document-level split produced no training documents")
+    log("global_document_split_complete", train_documents=len(train_doc_ids),
+        eval_documents=len(eval_doc_ids), total_documents=len(texts), seed=a.seed)
     for idx in range(a.start_layer, last_layer + 1):
         ffn = getattr(layers[idx], "mlp", None)
         if ffn is None or not all(hasattr(ffn, name) for name in ("gate_proj", "up_proj", "down_proj")):
@@ -113,12 +123,6 @@ def main() -> int:
                     x_docs.append(xb[row][valid])
                     y_docs.append(yb[row][valid])
         del captures, masks
-        doc_perm = torch.randperm(len(x_docs), generator=torch.Generator().manual_seed(a.seed + idx))
-        n_eval_docs = max(1, int(a.eval_fraction * len(doc_perm)))
-        eval_doc_ids = doc_perm[:n_eval_docs].tolist()
-        train_doc_ids = doc_perm[n_eval_docs:].tolist()
-        if not train_doc_ids:
-            raise ValueError("Document-level split produced no training documents.")
         x_train, y_train = torch.cat([x_docs[i] for i in train_doc_ids]), torch.cat([y_docs[i] for i in train_doc_ids])
         x_eval, y_eval = torch.cat([x_docs[i] for i in eval_doc_ids]), torch.cat([y_docs[i] for i in eval_doc_ids])
         total_tokens = len(x_train) + len(x_eval)
@@ -160,7 +164,7 @@ def main() -> int:
         eval_mse = F.mse_loss(eval_pred, y_eval).item()
         eval_relative_error = (eval_pred-y_eval).norm().item() / y_eval.norm().clamp_min(1e-12).item()
         eval_cosine = F.cosine_similarity(eval_pred.reshape(1,-1), y_eval.reshape(1,-1)).item()
-        out = a.output_dir / f"layer_{idx:02d}_top2_32experts.pt"
+        out = a.output_dir / f"layer_{idx:02d}_top{a.top_k}_{a.num_experts}experts.pt"
         torch.save({
             "model_id": a.model, "layer": idx, "hidden_size": int(x_train.shape[-1]),
             "num_experts": a.num_experts, "top_k": a.top_k,
@@ -179,14 +183,14 @@ def main() -> int:
         if device.type == "cuda":
             torch.cuda.empty_cache()
     present_checkpoints = sorted(
-        path.name for path in a.output_dir.glob("layer_*_top2_32experts.pt")
+        path.name for path in a.output_dir.glob("layer_*_top*_experts.pt")
     )
     manifest = {
         "status": "layer_checkpoints_created",
         "model_id": a.model, "device": str(device), "dtype": str(dtype),
         "num_layers_in_teacher": len(layers), "last_run_layer_range": [a.start_layer, last_layer],
         "num_experts": a.num_experts, "top_k": a.top_k, "epochs": a.epochs,
-        "training_documents_including_held_out": len(texts), "eval_fraction": a.eval_fraction,
+        "total_documents": len(texts), "train_documents": len(train_doc_ids),\n        "eval_documents": len(eval_doc_ids), "eval_fraction": a.eval_fraction,
         "balance_loss_weight": a.balance_loss_weight, "max_length": a.max_length,
         "checkpoint_count_present": len(present_checkpoints),
         "checkpoints": present_checkpoints,
