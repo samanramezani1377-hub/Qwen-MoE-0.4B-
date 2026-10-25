@@ -8,6 +8,8 @@
 
 **مسیر اصلی و واحد آموزش متنی فعلی** در Google Colab است: [نوت‌بوک آموزش ترکیبی متن ChatGPT + logits معلم Qwen](notebooks/02_colab_chatgpt_text_qwen_logits.ipynb). این مسیر پاسخ‌های متنی را با Cross-Entropy و سیگنال logits معلم Qwen را با sparse KD در یک حلقهٔ آموزش استفاده می‌کند؛ مسیرهای text-only و logits-only اجرا نمی‌شوند. آرشیو متنی این نسخه از `data/chatgpt_prompt_response_archive_part2.jsonl` در GitHub خوانده می‌شود؛ خروجی‌های حجیم logits و آموزش و checkpointها همچنان روی Google Drive می‌مانند. GitHub Actions آموزش مدل را اجرا نمی‌کند.
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/samanramezani1377-hub/Qwen-MoE-0.4B-/blob/main/notebooks/02_colab_chatgpt_text_qwen_logits.ipynb)
+
 - [نوت‌بوک آموزش ترکیبی واحد](notebooks/02_colab_chatgpt_text_qwen_logits.ipynb)
 - [اسکریپت استخراج logits هم‌تراز با پاسخ](scripts/capture_qwen_logits_for_chatgpt_data.py)
 - [اسکریپت آموزش ترکیبی MoE با CE + sparse KD](scripts/train_moe_chatgpt_qwen_kd.py)
