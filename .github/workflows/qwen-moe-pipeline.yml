@@ -1,0 +1,264 @@
+name: Qwen MoE unified pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "docs/**"
+      - "notebooks/**"
+      - "README-project.md"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-moe-unified-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  syntax:
+    name: Python syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile project scripts
+        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py
+
+  synthetic-moe:
+    name: Synthetic MoE correctness
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache pip and model downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface/hub
+          key: ubuntu-py311-qwen-moe-cache-v1
+          restore-keys: |
+            ubuntu-py311-qwen-moe-cache-
+      - name: Install CPU PyTorch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+      - name: Test synthetic channel-sharded FFN equivalence and sparse dispatch
+        run: python scripts/moe_ffn_prototype.py
+
+  qwen-weight-transfer:
+    name: Real Qwen weight transfer
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache pip and model downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface/hub
+          key: ubuntu-py311-qwen-moe-cache-v1
+          restore-keys: |
+            ubuntu-py311-qwen-moe-cache-
+      - name: Install CPU PyTorch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+      - name: Test channel-sharded FFN with real Qwen layer-0 weights
+        run: python scripts/test_qwen_ffn_transfer.py
+
+  metadata-audit:
+    name: Model metadata audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run model metadata and safetensors header audit
+        run: python scripts/audit_model.py --output audit-report.json
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen-model-audit-report
+          path: audit-report.json
+          if-no-files-found: error
+          retention-days: 14
+
+  smoke-distillation:
+    name: Tiny real-FFN smoke training
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache pip and Hugging Face downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface/hub
+          key: ubuntu-py311-qwen-moe-cache-v1
+          restore-keys: |
+            ubuntu-py311-qwen-moe-cache-
+      - name: Install CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install transformers accelerate safetensors
+      - name: Create tiny Persian smoke corpus
+        run: |
+          mkdir -p data
+          cat > data/fa_smoke.txt <<'EOF'
+          سلام، این یک نمونه متن فارسی برای آزمایش مدل است.
+          هوش مصنوعی می‌تواند متن را تحلیل کند و به پرسش‌ها پاسخ دهد.
+          برای ساخت مدل محلی باید کیفیت، حافظه و سرعت را هم‌زمان سنجید.
+          یادگیری ماشین با داده‌های مناسب می‌تواند الگوهای زبانی را بیاموزد.
+          EOF
+      - name: Distil one real Qwen FFN on CPU
+        env:
+          HF_HUB_DISABLE_TELEMETRY: "1"
+          TOKENIZERS_PARALLELISM: "false"
+        run: |
+          mkdir -p artifacts
+          python scripts/distill_real_qwen_ffn.py \
+            --text-file data/fa_smoke.txt \
+            --layer 0 --samples 4 --max-length 16 \
+            --num-experts 8 --top-k 2 --epochs 1 \
+            --batch-size 1 --device cpu \
+            --output artifacts/layer0_top2_smoke.pt
+      - name: Upload smoke checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen-real-ffn-distillation-smoke
+          path: artifacts/layer0_top2_smoke.pt
+          if-no-files-found: error
+          retention-days: 7
+
+  persian-distillation:
+    name: Persian Wikipedia FFN training
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Cache pip and Hugging Face downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/huggingface/hub
+            ~/.cache/huggingface/datasets
+          key: ubuntu-py311-qwen-moe-cache-v1
+          restore-keys: |
+            ubuntu-py311-qwen-moe-cache-
+      - name: Install CPU dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install transformers accelerate safetensors datasets
+      - name: Collect 64 Persian Wikipedia samples
+        run: |
+          python - <<'PY'
+          from datasets import load_dataset
+          import os
+          os.makedirs("data", exist_ok=True)
+          stream = load_dataset("wikimedia/wikipedia", "20231101.fa", split="train", streaming=True)
+          count = 0
+          with open("data/fa_wikipedia.txt", "w", encoding="utf-8") as f:
+              for row in stream:
+                  body = " ".join(str(row.get("text", "")).split())
+                  if len(body) < 160:
+                      continue
+                  f.write(body[:4000] + "\\n")
+                  count += 1
+                  if count >= 64:
+                      break
+              f.flush()
+              os.fsync(f.fileno())
+          if count < 64:
+              raise RuntimeError(f"Expected 64 samples, got {count}")
+          print(f"Collected {count} Persian samples", flush=True)
+          PY
+      - name: Train and evaluate one real FFN layer
+        env:
+          TOKENIZERS_PARALLELISM: "false"
+          HF_HUB_DISABLE_TELEMETRY: "1"
+        run: |
+          mkdir -p artifacts
+          python scripts/distill_real_qwen_ffn.py \
+            --text-file data/fa_wikipedia.txt \
+            --layer 0 --samples 64 --max-length 96 \
+            --num-experts 8 --top-k 2 --epochs 2 \
+            --batch-size 1 --device cpu \
+            --output artifacts/layer0_persian_wikipedia_top2_64x2.pt
+      - name: Upload Persian experiment
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen-persian-wikipedia-ffn-experiment
+          path: |
+            artifacts/layer0_persian_wikipedia_top2_64x2.pt
+            data/fa_wikipedia.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  sync-to-huggingface:
+    name: Sync source to Hugging Face
+    runs-on: ubuntu-latest
+    needs:
+      - syntax
+      - synthetic-moe
+      - qwen-weight-transfer
+      - metadata-audit
+      - smoke-distillation
+      - persian-distillation
+    steps:
+      - name: Checkout GitHub repository
+        uses: actions/checkout@v4
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Sync project source files to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "Missing repository secret HF_TOKEN."
+            exit 1
+          fi
+          git clone "https://mrSpaser:${HF_TOKEN}@huggingface.co/mrSpaser/Qwen-MoE-0.4B" hf-model
+          mkdir -p hf-model/scripts hf-model/notebooks hf-model/docs
+          rsync -a --delete scripts/ hf-model/scripts/
+          rsync -a --delete notebooks/ hf-model/notebooks/
+          rsync -a --delete docs/ hf-model/docs/
+          if [ -f README-project.md ]; then
+            cp README-project.md hf-model/README-project.md
+          else
+            rm -f hf-model/README-project.md
+          fi
+          rm -f hf-model/سلام.txt
+          cd hf-model
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No project changes to sync."
+          else
+            git commit -m "chore: sync project files from GitHub"
+            git push
+          fi
