@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import struct
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -30,11 +32,107 @@ def hub_url(path: str) -> str:
     return "https://huggingface.co/" + path.lstrip("/")
 
 
+def fetch_safetensors_header(url: str, max_header_bytes: int = 32 * 1024 * 1024) -> dict[str, Any]:
+    """Fetch only the safetensors header using HTTP Range; never request tensor payloads."""
+    first_request = urllib.request.Request(
+        url, headers={"User-Agent": USER_AGENT, "Range": "bytes=0-7"}
+    )
+    with urllib.request.urlopen(first_request, timeout=60) as response:
+        first = response.read(8)
+    if len(first) != 8:
+        raise RuntimeError(f"Could not read safetensors header length from {url}")
+    header_size = struct.unpack("<Q", first)[0]
+    if header_size <= 0 or header_size > max_header_bytes:
+        raise RuntimeError(f"Unreasonable safetensors header size {header_size} for {url}")
+
+    header_request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Range": f"bytes=8-{7 + header_size}",
+        },
+    )
+    with urllib.request.urlopen(header_request, timeout=60) as response:
+        header_bytes = response.read(header_size)
+    if len(header_bytes) != header_size:
+        raise RuntimeError(
+            f"Range response was truncated for {url}: expected {header_size}, got {len(header_bytes)}"
+        )
+    header = json.loads(header_bytes.decode("utf-8"))
+    tensors = []
+    for name, metadata in header.items():
+        if name == "__metadata__" or not isinstance(metadata, dict):
+            continue
+        shape = metadata.get("shape", [])
+        count = math.prod(shape) if shape else 1
+        tensors.append({
+            "name": name,
+            "shape": shape,
+            "dtype": metadata.get("dtype"),
+            "numel": count,
+        })
+    return {"header_bytes": header_size, "tensors": tensors}
+
+
+def summarize_tensor_headers(files: list[dict[str, Any]], base: str) -> dict[str, Any]:
+    """Count tensor elements from remote safetensors headers only."""
+    summaries = []
+    total = 0
+    by_dtype: dict[str, int] = {}
+    by_component: dict[str, int] = {"text": 0, "vision": 0, "other": 0}
+    failures = []
+    for item in files:
+        name = item.get("rfilename", "")
+        if not name.endswith(".safetensors"):
+            continue
+        url = f"{base}/{name}"
+        try:
+            header = fetch_safetensors_header(url)
+            file_total = sum(t["numel"] for t in header["tensors"])
+            total += file_total
+            for tensor in header["tensors"]:
+                dtype = str(tensor.get("dtype") or "unknown")
+                by_dtype[dtype] = by_dtype.get(dtype, 0) + tensor["numel"]
+                key = tensor["name"].lower()
+                if any(part in key for part in ("visual.", "vision_tower", "vision_model")):
+                    component = "vision"
+                elif any(part in key for part in ("language_model.", "text_model.", "embed_tokens.", "layers.", "lm_head.")):
+                    component = "text"
+                else:
+                    component = "other"
+                by_component[component] += tensor["numel"]
+            summaries.append({
+                "file": name,
+                "header_bytes_read": header["header_bytes"],
+                "tensor_count": len(header["tensors"]),
+                "tensor_elements": file_total,
+                "method": "HTTP Range; safetensors header only",
+            })
+        except Exception as exc:
+            failures.append({"file": name, "error": str(exc)})
+    return {
+        "status": "complete" if summaries and not failures else ("partial" if summaries else "unavailable"),
+        "method": "HTTP Range requests for safetensors headers only; tensor payloads are not downloaded",
+        "tensor_count_total": sum(item["tensor_count"] for item in summaries),
+        "serialized_tensor_elements_total": total,
+        "serialized_tensor_elements_by_component_heuristic": by_component,
+        "serialized_tensor_elements_by_dtype": by_dtype,
+        "files": summaries,
+        "failures": failures,
+        "caveat": (
+            "This counts elements represented by serialized tensors, not guaranteed trainable parameters: "
+            "state dictionaries may include buffers, and component grouping is based on tensor-name heuristics. "
+            "No exact architectural parameter count is claimed from headers alone."
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Hugging Face model ID")
     parser.add_argument("--revision", default="main", help="Branch, tag, or commit")
     parser.add_argument("--output", default="audit-report.json", help="Output JSON path")
+    parser.add_argument("--skip-safetensors-headers", action="store_true", help="Do not issue small HTTP Range requests for safetensors headers")
     args = parser.parse_args()
 
     model_id = args.model.strip("/")
@@ -87,6 +185,7 @@ def main() -> int:
     active_expert_ffn = params_per_expert * top_k * layers
     dense_ffn = 3 * hidden * intermediate * layers
     hub_safetensors = info.get("safetensors")
+    header_audit = None if args.skip_safetensors_headers else summarize_tensor_headers(files, base)
     parameter_metadata = (
         hub_safetensors.get("parameters")
         if isinstance(hub_safetensors, dict)
@@ -127,6 +226,7 @@ def main() -> int:
         },
         "hub_parameter_metadata": parameter_metadata,
         "hub_safetensors_metadata": hub_safetensors,
+        "safetensors_header_audit": header_audit,
         "relevant_files": file_summary,
         "formula_estimates_not_checkpoint_counts": {
             "embedding_matrix_parameters": hidden * vocab if hidden and vocab else None,
@@ -144,11 +244,9 @@ def main() -> int:
             ),
         },
         "scope": (
-            "Metadata/config audit only. No weight tensor files were downloaded, "
-            "no model was instantiated, and no training or paid compute was run. "
-            "Hub parameter metadata is reported only if supplied by the API; exact "
-            "checkpoint tensor counts still require inspecting safetensors headers "
-            "or loading model weights."
+            "Config/Hub metadata audit. If enabled, only small safetensors headers are read using HTTP Range; "
+            "tensor payloads are not downloaded. No model was instantiated and no training or paid compute was run. "
+            "Header element counts are not automatically equated with exact trainable parameter counts."
         ),
     }
 
