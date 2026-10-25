@@ -139,17 +139,20 @@ jobs:
             --layer 0 --samples 4 --max-length 16 \
             --num-experts 8 --top-k 2 --epochs 1 \
             --batch-size 1 --device cpu \
+            --benchmark-warmup 1 --benchmark-repeats 3 \
             --output artifacts/layer0_top2_smoke.pt
       - name: Upload smoke checkpoint
         uses: actions/upload-artifact@v4
         with:
           name: qwen-real-ffn-distillation-smoke
-          path: artifacts/layer0_top2_smoke.pt
+          path: |
+            artifacts/layer0_top2_smoke.pt
+            artifacts/layer0_top2_smoke.benchmark.json
           if-no-files-found: error
           retention-days: 7
 
   persian-distillation:
-    name: Persian Wikipedia FFN training
+    name: Persian dataset FFN training + speed benchmark
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -198,6 +201,7 @@ jobs:
             --layer 0 --samples 64 --max-length 96 \
             --num-experts 8 --top-k 2 --epochs 2 \
             --batch-size 1 --device cpu \
+            --benchmark-warmup 3 --benchmark-repeats 12 \
             --output artifacts/layer0_persian_top2_experiment.pt
       - name: Upload Persian experiment
         uses: actions/upload-artifact@v4
@@ -205,6 +209,7 @@ jobs:
           name: qwen-persian-ffn-experiment
           path: |
             artifacts/layer0_persian_top2_experiment.pt
+            artifacts/layer0_persian_top2_experiment.benchmark.json
             data/fa_persian_corpus.manifest.json
           if-no-files-found: error
           retention-days: 7
@@ -254,6 +259,7 @@ jobs:
           rm -f hf-model/سلام.txt
           mkdir -p hf-model/experiments
           cp downloaded-persian-artifact/artifacts/layer0_persian_top2_experiment.pt hf-model/experiments/layer0_persian_top2_experiment.pt
+          cp downloaded-persian-artifact/artifacts/layer0_persian_top2_experiment.benchmark.json hf-model/experiments/layer0_persian_top2_experiment.benchmark.json
           cp downloaded-persian-artifact/data/fa_persian_corpus.manifest.json hf-model/experiments/persian_corpus.manifest.json
           cat > hf-model/experiments/README.md <<'EOF'
           # Experimental Persian FFN checkpoint
@@ -262,6 +268,8 @@ jobs:
           The training corpus is collected from a real Hugging Face Persian text dataset using streaming.
           See `persian_corpus.manifest.json` for dataset, license, sample count, and document provenance.
           The collector has no synthetic fallback: if both real sources fail, the training job fails.
+
+          `layer0_persian_top2_experiment.benchmark.json` records original-FFN versus trained top-2 MoE forward-only latency and token-vector throughput on identical inputs. These are layer-level measurements, not end-to-end generation speed or Android performance.
           EOF
           cd hf-model
           git lfs track "experiments/*.pt"
