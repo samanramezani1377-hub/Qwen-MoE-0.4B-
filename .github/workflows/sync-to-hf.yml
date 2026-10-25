@@ -1,4 +1,4 @@
-name: Sync test file to Hugging Face
+name: Sync files to Hugging Face
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Copy سلام.txt to Hugging Face model repo
+      - name: Sync سلام.txt to Hugging Face model repo
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -27,12 +27,16 @@ jobs:
             exit 1
           fi
           git clone "https://mrSpaser:${HF_TOKEN}@huggingface.co/mrSpaser/Qwen-MoE-0.4B" hf-model
-          cp "سلام.txt" "hf-model/سلام.txt"
+          if [ -f "سلام.txt" ]; then
+            cp "سلام.txt" "hf-model/سلام.txt"
+          else
+            rm -f "hf-model/سلام.txt"
+          fi
           cd hf-model
-          git add "سلام.txt"
+          git add -A -- "سلام.txt"
           if git diff --cached --quiet; then
             echo "No changes to sync."
           else
-            git commit -m "test: add Persian سلام file from GitHub"
+            git commit -m "chore: sync سلام.txt deletion or update from GitHub"
             git push
           fi
