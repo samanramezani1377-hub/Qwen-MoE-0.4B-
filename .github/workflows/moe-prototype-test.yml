@@ -1,13 +1,6 @@
 name: MoE FFN prototype test
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/moe_ffn_prototype.py"
-      - "scripts/test_qwen_ffn_transfer.py"
-      - "scripts/distill_real_qwen_ffn.py"
-      - ".github/workflows/moe-prototype-test.yml"
   workflow_dispatch:
 
 jobs:
