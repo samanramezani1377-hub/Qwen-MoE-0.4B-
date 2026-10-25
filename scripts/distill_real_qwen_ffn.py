@@ -113,7 +113,13 @@ def get_text_model(model: nn.Module) -> nn.Module:
             pass
     raise RuntimeError("Could not locate text decoder layers in this Transformers/model version.")
 
-def make_moe_from_ffn(ffn: nn.Module, num_experts: int, top_k: int) -> nn.Module:
+def make_moe_from_ffn(ffn: nn.Module, num_experts: int, top_k: int,
+                      channel_groups: list[list[int]] | None = None) -> nn.Module:
+    """Initialize balanced experts from all original FFN channels.
+
+    If channel_groups is supplied, it must partition every intermediate channel exactly once
+    and give each expert the same width. The groups can come from activation/weight analysis.
+    """
     if not all(hasattr(ffn, n) for n in ("gate_proj", "up_proj", "down_proj")):
         raise TypeError(f"Expected SwiGLU gate/up/down FFN; got {type(ffn).__name__}")
     gate, up, down = (ffn.gate_proj.weight.detach(), ffn.up_proj.weight.detach(), ffn.down_proj.weight.detach())
@@ -121,6 +127,13 @@ def make_moe_from_ffn(ffn: nn.Module, num_experts: int, top_k: int) -> nn.Module
     if intermediate % num_experts:
         raise ValueError(f"intermediate size {intermediate} not divisible by num_experts={num_experts}")
     shard, device, dtype = intermediate // num_experts, gate.device, gate.dtype
+    if channel_groups is None:
+        channel_groups = [list(range(i * shard, (i + 1) * shard)) for i in range(num_experts)]
+    if len(channel_groups) != num_experts or any(len(g) != shard for g in channel_groups):
+        raise ValueError("channel_groups must contain num_experts groups of exactly intermediate_size/num_experts channels")
+    flattened = [int(j) for group in channel_groups for j in group]
+    if len(set(flattened)) != intermediate or set(flattened) != set(range(intermediate)):
+        raise ValueError("channel_groups must partition every original intermediate channel exactly once")
 
     class Expert(nn.Module):
         def __init__(self, i: int):
@@ -128,11 +141,11 @@ def make_moe_from_ffn(ffn: nn.Module, num_experts: int, top_k: int) -> nn.Module
             self.gate_proj = nn.Linear(hidden, shard, bias=False, device=device, dtype=dtype)
             self.up_proj = nn.Linear(hidden, shard, bias=False, device=device, dtype=dtype)
             self.down_proj = nn.Linear(shard, hidden, bias=False, device=device, dtype=dtype)
-            lo, hi = i * shard, (i + 1) * shard
+            indices = torch.tensor(channel_groups[i], dtype=torch.long, device=device)
             with torch.no_grad():
-                self.gate_proj.weight.copy_(gate[lo:hi])
-                self.up_proj.weight.copy_(up[lo:hi])
-                self.down_proj.weight.copy_(down[:, lo:hi])
+                self.gate_proj.weight.copy_(gate.index_select(0, indices))
+                self.up_proj.weight.copy_(up.index_select(0, indices))
+                self.down_proj.weight.copy_(down.index_select(1, indices))
         def forward(self, x):
             return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
 
