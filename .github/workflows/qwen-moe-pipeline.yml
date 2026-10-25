@@ -265,7 +265,7 @@ jobs:
         with:
           name: qwen-persian-ffn-experiment
           path: |
-            artifacts/layer0_persian_wikipedia_top2_64x2.pt
+            artifacts/layer0_persian_top2_experiment.pt
             data/fa_wikipedia.txt
           if-no-files-found: error
           retention-days: 7
