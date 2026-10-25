@@ -178,14 +178,18 @@ def main() -> int:
         del moe, opt, loader, x_train, y_train, x_eval, y_eval, params, eval_pred, eval_preds
         if device.type == "cuda":
             torch.cuda.empty_cache()
+    present_checkpoints = sorted(
+        path.name for path in a.output_dir.glob("layer_*_top2_32experts.pt")
+    )
     manifest = {
         "status": "layer_checkpoints_created",
         "model_id": a.model, "device": str(device), "dtype": str(dtype),
-        "num_layers_in_teacher": len(layers), "converted_layer_range": [a.start_layer, last_layer],
+        "num_layers_in_teacher": len(layers), "last_run_layer_range": [a.start_layer, last_layer],
         "num_experts": a.num_experts, "top_k": a.top_k, "epochs": a.epochs,
         "training_documents_including_held_out": len(texts), "eval_fraction": a.eval_fraction,
         "balance_loss_weight": a.balance_loss_weight, "max_length": a.max_length,
-        "checkpoints": [f"layer_{i:02d}_top2_32experts.pt" for i in range(a.start_layer, last_layer+1)],
+        "checkpoint_count_present": len(present_checkpoints),
+        "checkpoints": present_checkpoints,
         "important_limitation": "Per-layer checkpoints only. This script does not yet package a loadable full MoE Transformers model or export Android runtime files.",
     }
     (a.output_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
