@@ -39,7 +39,7 @@ jobs:
           # Remove the temporary test file from the earlier connectivity check.
           rm -f hf-model/سلام.txt
           cd hf-model
-          git add -A -- README-project.md scripts notebooks docs سلام.txt
+          git add -A
           if git diff --cached --quiet; then
             echo "No project changes to sync."
           else
