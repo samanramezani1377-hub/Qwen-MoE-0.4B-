@@ -6,17 +6,15 @@
 
 عدد 508.6M از ضرب vocab=248,320 در hidden_size=2,048 و مربوط به ماتریس embedding مدل مرجع است. اگر embedding و LM head مشترک باشند، این ماتریس فقط یک بار در شمارش کل پارامترهای یکتا حساب می‌شود؛ اما projection خروجی متراکم برای محاسبهٔ logits روی تمام واژگان، همهٔ این وزن‌ها را در مسیر تولید درگیر می‌کند. بنابراین 508.6M را نباید به‌عنوان کل پارامتر فعال all-in گزارش کرد؛ توجه و FFN نیز هزینه دارند. باید سه عدد جدا گزارش شوند: کل پارامترهای یکتا، فعال‌های بدنهٔ Transformer/MoE، و هزینهٔ LM head/logits.
 
-## طرح پایه برای آزمایش
+## انتخاب فعلی معماری آزمایشی
 
 - مدل مرجع: `Qwen/Qwen3.5-2B`
-- 24 لایه، hidden size=2048، حفظ ترتیب واقعی لایه‌های linear/full attention از config
-- 8 متخصص برای هر FFN تبدیل‌شده، top-2
-- expert intermediate size=768 به‌عنوان نقطهٔ شروع
-- هر متخصص SwiGLU تقریباً `3 × 2048 × 768 = 4,718,592` پارامتر
-- همهٔ متخصص‌ها در 24 لایه: تقریباً 906M پارامتر
-- دو متخصص فعال در هر لایه: تقریباً 226.5M پارامتر فعال FFN، بدون attention، embedding/head و اجزای دیگر
+- انتخاب فعلی: **Top-2 routing با 32 متخصص**؛ آزمایش Top-4 دیگر در مسیر نهایی استفاده نمی‌شود.
+- هدف اجرا: CPU-first و سپس ارزیابی جداگانه روی Android/ARM64؛ هنوز تبدیل کامل همهٔ لایه‌ها انجام نشده است.
+- متخصص‌ها از کانال‌های FFN اصلی shard می‌شوند؛ router باید با تقطیر روی فعال‌سازی‌های واقعی تنظیم شود.
+- اعداد پارامتر فعال/کل باید از پیکربندی و وزن‌های واقعی محاسبه شوند، نه از عدد متخصص‌ها به‌تنهایی.
 
-این اعداد تخمین اولیه‌اند، نه معماری نهایی. شمارش واقعی وزن‌های checkpoint باید انجام شود و اندازهٔ متخصص‌ها بر اساس آن تنظیم شود تا کل مدل نزدیک 2B بماند.
+این انتخاب فعلاً پیکربندی آزمایش نهایی است، نه ادعای اینکه مدل کامل MoE ساخته یا کیفیت آن تأیید شده است. checkpoint موجود فقط FFN یک لایه را پوشش می‌دهد.
 
 ## دادهٔ فارسی برای آزمایش
 
@@ -48,8 +46,10 @@
 The unified workflow splits whole Persian documents before tokenization and runs `scripts/validate_moe_experiment.py` against held-out documents. It records relative/normalized errors, zero-output and random-router baselines, repeated layer timing, process memory, and a measured text-backbone parameter inventory plus a clearly labelled all-layer MoE estimate. The 0.4B target is reported separately for transformer-core active parameters and the full-vocabulary logits projection; it is not assumed to be achievable. See `docs/INDEPENDENT_MOE_VALIDATION.md`.
 
 
-## Active-parameter budget sweep (in progress)
+## انتخاب 32 متخصص و سنجش اختلاف خروجی
 
-The unified workflow now runs `scripts/sweep_moe_budgets.py` after the document-level Persian split. It compares 8, 16, 32 and 48 channel-sharded experts with top-2 routing, using the same train documents and held-out documents for every variant. To keep the free CPU experiment bounded, it caps training/evaluation token vectors and trains only the real layer-0 FFN; it loads the base checkpoint once per sweep. The report is `experiments/active_budget_sweep.json`.
+ورک‌فلو یکپارچه با `top-k=2` و `32 experts` آموزش/اعتبارسنجی FFN لایهٔ صفر را انجام می‌دهد. `experiments/active_budget_sweep.json` اکنون فقط نتیجهٔ پیکربندی انتخاب‌شده را ثبت می‌کند؛ آزمایش Top-4 و مقایسهٔ چند تعداد متخصص از مسیر اجرایی نهایی حذف شده است.
 
-The sweep reports actual parameter counts from the loaded text backbone, a hypothetical all-layer active-core estimate, the full logits projection separately, held-out FFN-output MSE/relative-L2/cosine similarity, and single-layer throughput. These metrics compare imitation of one dense FFN, **not** full language generation, reasoning, or Android performance. The 450M/400M targets are not assumed reachable by increasing expert count alone: the measured non-FFN core is a lower bound under this particular design. Architecture changes beyond FFN sharding may be required if that floor exceeds a target.
+اسکریپت `scripts/evaluate_model_outputs.py` نیز مدل dense اصلی را با همان مدل پس از جایگزینی فقط FFN لایهٔ صفر مقایسه می‌کند. گزارش `experiments/model_output_comparison.json` شامل اختلاف logits، توافق توکن بعدی، KL، cross-entropy/perplexity روی اسناد نگه‌داشته‌شده و تفاوت ادامهٔ greedy متن است. افزایش perplexity یک برآورد قابل‌اندازه‌گیری از افت پیش‌بینی روی همین مجموعه است؛ درصد تفاوت متن یا logits به‌تنهایی درصد افت کیفیت انسانی نیست.
+
+**محدودیت حیاتی:** هنوز فقط یک FFN جایگزین می‌شود؛ این آزمایش، مقایسهٔ پاسخ‌های مدل کامل MoE نهایی نیست و نباید به‌عنوان سنجش نهایی استدلال یا سرعت Android معرفی شود. برای چنین ادعایی باید همهٔ لایه‌ها تبدیل شوند و بعد آزمون‌های end-to-end انجام شوند.
