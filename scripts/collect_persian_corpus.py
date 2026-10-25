@@ -64,7 +64,7 @@ def main():
                 provenance.append({
                     "row_index":idx,
                     "url":str(row.get("url",""))[:1000],
-                    "doc_id":str(row.get("doc_id",row.get("id","")))[:200
+                    "doc_id":str(row.get("doc_id",row.get("id","")))[:200]
                 })
                 # Durable incremental checkpoint: a runtime interruption loses at most ~100 rows.
                 if len(rows) % 100 == 0:
