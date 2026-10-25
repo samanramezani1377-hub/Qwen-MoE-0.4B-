@@ -1,0 +1,59 @@
+name: Dispatch combined MoE training to Kaggle GPU
+
+on:
+  workflow_dispatch:
+    inputs:
+      kaggle_username:
+        description: "Your Kaggle profile username (not your email or API token)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  push-kaggle-notebook:
+    name: Upload notebook and start Kaggle GPU run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Kaggle CLI
+        run: python -m pip install --upgrade kaggle
+
+      - name: Configure Kaggle notebook metadata
+        env:
+          KAGGLE_USERNAME_INPUT: ${{ inputs.kaggle_username }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path("kaggle/combined_moe/kernel-metadata.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          username = os.environ["KAGGLE_USERNAME_INPUT"].strip()
+          if not username or "/" in username or any(c.isspace() for c in username):
+              raise SystemExit("Invalid Kaggle username. Enter only the profile username.")
+          data["id"] = f"{username}/qwen-moe-combined-text-qwen-kd"
+          path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          print("Prepared Kaggle kernel:", data["id"])
+          PY
+
+      - name: Push notebook to Kaggle and start GPU execution
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN || secrets.kaggle }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KAGGLE_API_TOKEN:-}" ]; then
+            echo "::error::Repository secret KAGGLE_API_TOKEN or kaggle is missing."
+            exit 1
+          fi
+          kaggle kernels push -p kaggle/combined_moe --accelerator NvidiaTeslaT4 --timeout 43200
+          echo "Kaggle accepted the notebook push. Training runs on Kaggle, not on this GitHub runner."
