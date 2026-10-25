@@ -9,7 +9,15 @@ on:
       - "notebooks/**"
       - "README-project.md"
       - ".github/workflows/qwen-moe-pipeline.yml"
+  # Training is performed in Google Colab for now. The GitHub training jobs
+  # are retained for future use, but require an explicit manual opt-in.
   workflow_dispatch:
+    inputs:
+      enable_github_training:
+        description: "Enable the optional GitHub CPU training experiment (normally use Colab)"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -97,6 +105,7 @@ jobs:
           retention-days: 14
 
   smoke-distillation:
+    if: ${{ inputs.enable_github_training == true }}
     name: Tiny real-FFN smoke training
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -152,6 +161,7 @@ jobs:
           retention-days: 7
 
   persian-distillation:
+    if: ${{ inputs.enable_github_training == true }}
     name: Persian dataset FFN training + active-budget sweep
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -262,6 +272,7 @@ jobs:
           retention-days: 7
 
   sync-to-huggingface:
+    if: ${{ inputs.enable_github_training == true }}
     name: Sync source to Hugging Face
     runs-on: ubuntu-latest
     needs:
