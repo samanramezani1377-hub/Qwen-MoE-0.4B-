@@ -231,7 +231,7 @@ jobs:
             --train-text-file data/fa_train_documents.txt \
             --eval-text-file data/fa_eval_documents.txt \
             --output artifacts/active_budget_sweep.json \
-            --layer 0 --experts 8,16,32,48 --top-k 2 \
+            --layer 0 --experts 8,16,32,48 --top-k 4 \
             --max-length 96 --max-train-token-vectors 1024 \
             --max-eval-token-vectors 2048 --epochs 2 --train-batch-size 32 \
             --device cpu --benchmark-repeats 3
