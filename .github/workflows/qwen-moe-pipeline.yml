@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile project scripts
-        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py
+        run: python -m py_compile scripts/audit_model.py scripts/moe_ffn_prototype.py scripts/test_qwen_ffn_transfer.py scripts/distill_real_qwen_ffn.py scripts/collect_persian_wikipedia.py
 
   synthetic-moe:
     name: Synthetic MoE correctness
@@ -171,30 +171,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install transformers accelerate safetensors datasets
+          python -m pip install transformers accelerate safetensors requests
       - name: Collect 64 Persian Wikipedia samples
+        timeout-minutes: 5
         run: |
-          python - <<'PY'
-          from datasets import load_dataset
-          import os
-          os.makedirs("data", exist_ok=True)
-          stream = load_dataset("wikimedia/wikipedia", "20231101.fa", split="train", streaming=True)
-          count = 0
-          with open("data/fa_wikipedia.txt", "w", encoding="utf-8") as f:
-              for row in stream:
-                  body = " ".join(str(row.get("text", "")).split())
-                  if len(body) < 160:
-                      continue
-                  f.write(body[:4000] + "\\n")
-                  count += 1
-                  if count >= 64:
-                      break
-              f.flush()
-              os.fsync(f.fileno())
-          if count < 64:
-              raise RuntimeError(f"Expected 64 samples, got {count}")
-          print(f"Collected {count} Persian samples", flush=True)
-          PY
+          python scripts/collect_persian_wikipedia.py \
+            --count 64 --min-chars 160 --max-chars 4000 \
+            --max-requests 20 --timeout 20 \
+            --output data/fa_wikipedia.txt
       - name: Train and evaluate one real FFN layer
         env:
           TOKENIZERS_PARALLELISM: "false"
