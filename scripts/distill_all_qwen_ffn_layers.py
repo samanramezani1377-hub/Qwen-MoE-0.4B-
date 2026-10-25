@@ -199,9 +199,24 @@ def main() -> int:
         log("router_warmstart_complete", layer=idx, **router_warmstart)
         params = [q for q in moe.parameters() if q.requires_grad]
         opt = torch.optim.AdamW(params, lr=a.lr)
+        resume_path = a.output_dir / f"layer_{idx:02d}_training_resume.pt"
+        start_epoch = 0
+        if resume_path.exists():
+            resume = torch.load(resume_path, map_location=device, weights_only=False)
+            expected = (a.model, teacher_revision, idx, a.num_experts, a.top_k, a.epochs, a.max_length)
+            found = (resume.get("model_id"), resume.get("teacher_revision"), resume.get("layer"),
+                     resume.get("num_experts"), resume.get("top_k"), resume.get("total_epochs"),
+                     resume.get("max_length"))
+            if found != expected:
+                raise RuntimeError(f"Resume checkpoint configuration mismatch: expected={expected}, found={found}. Move or rename {resume_path} before starting a different run.")
+            moe.load_state_dict(resume["state_dict"])
+            opt.load_state_dict(resume["optimizer_state_dict"])
+            start_epoch = int(resume["next_epoch"])
+            log("training_resumed_from_epoch_checkpoint", layer=idx, next_epoch=start_epoch+1,
+                completed_epochs=start_epoch, resume_checkpoint=str(resume_path))
         loader = DataLoader(TensorDataset(x_train, y_train), batch_size=a.train_batch_size, shuffle=True)
         moe.train()
-        for epoch in range(a.epochs):
+        for epoch in range(start_epoch, a.epochs):
             losses = []
             for step, (xb, yb) in enumerate(loader, 1):
                 xb, yb = xb.to(device), yb.to(device)
@@ -221,6 +236,16 @@ def main() -> int:
                         relative_mse=float(relative_mse.detach()), balance_loss=float(balance_loss.detach()))
             log("layer_epoch_complete", layer=idx, epoch=epoch+1,
                 mean_train_mse=sum(losses)/max(1,len(losses)))
+            # Atomic Drive-friendly epoch checkpoint. A disconnect restarts at most the current epoch.
+            temp_resume = resume_path.with_suffix(".tmp")
+            torch.save({"model_id":a.model,"teacher_revision":teacher_revision,"layer":idx,
+                "num_experts":a.num_experts,"top_k":a.top_k,"total_epochs":a.epochs,
+                "max_length":a.max_length,"next_epoch":epoch+1,
+                "state_dict":{k:v.detach().cpu() for k,v in moe.state_dict().items()},
+                "optimizer_state_dict":opt.state_dict()}, temp_resume)
+            temp_resume.replace(resume_path)
+            log("epoch_resume_checkpoint_saved", layer=idx, completed_epochs=epoch+1,
+                checkpoint=str(resume_path))
         moe.eval()
         eval_preds = []
         with torch.inference_mode():
@@ -257,6 +282,8 @@ def main() -> int:
             "training_objective": "greedy teacher-informed router warm-start, then normalized FFN distillation plus load balancing",
             "state_dict": {k: v.detach().cpu() for k, v in moe.state_dict().items()},
         }, out)
+        if resume_path.exists():
+            resume_path.unlink()
         log("layer_complete", layer=idx, eval_mse=eval_mse,
             eval_relative_error=eval_relative_error, eval_cosine_similarity=eval_cosine,
             dead_experts_on_eval=int((route_counts == 0).sum().item()),
