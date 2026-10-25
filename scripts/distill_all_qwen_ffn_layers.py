@@ -75,6 +75,8 @@ def main() -> int:
     tokenizer = AutoTokenizer.from_pretrained(a.model, trust_remote_code=a.trust_remote_code)
     teacher = AutoModel.from_pretrained(a.model, torch_dtype=dtype, low_cpu_mem_usage=True,
                                         trust_remote_code=a.trust_remote_code).to(device).eval()
+    teacher_revision = getattr(getattr(teacher, "config", None), "_commit_hash", None)
+    log("teacher_loaded", model=a.model, teacher_revision=teacher_revision)
     text_model = get_text_model(teacher)
     layers = text_model.layers
     last_layer = len(layers) - 1 if a.end_layer < 0 else a.end_layer
@@ -164,6 +166,15 @@ def main() -> int:
         eval_mse = F.mse_loss(eval_pred, y_eval).item()
         eval_relative_error = (eval_pred-y_eval).norm().item() / y_eval.norm().clamp_min(1e-12).item()
         eval_cosine = F.cosine_similarity(eval_pred.reshape(1,-1), y_eval.reshape(1,-1)).item()
+        with torch.inference_mode():
+            route_indices = []
+            for start in range(0, len(x_eval), a.train_batch_size):
+                xb = x_eval[start:start+a.train_batch_size].to(device)
+                route_indices.append(torch.topk(moe.router(xb.float()), a.top_k, dim=-1).indices.cpu())
+            route_ids = torch.cat(route_indices, dim=0).reshape(-1)
+            route_counts = torch.bincount(route_ids, minlength=a.num_experts)
+            route_fraction = route_counts.float() / route_counts.sum().clamp_min(1)
+            route_entropy = float((-(route_fraction * route_fraction.clamp_min(1e-12).log()).sum()).item())
         out = a.output_dir / f"layer_{idx:02d}_top{a.top_k}_{a.num_experts}experts.pt"
         torch.save({
             "model_id": a.model, "teacher_revision": teacher_revision, "layer": idx, "hidden_size": int(x_train.shape[-1]),
@@ -172,13 +183,18 @@ def main() -> int:
             "eval_tokens": int(len(x_eval)), "train_documents": len(train_doc_ids),
             "eval_documents": len(eval_doc_ids), "eval_mse": eval_mse,
             "eval_relative_error": eval_relative_error, "eval_cosine_similarity": eval_cosine,
+            "expert_route_assignments": route_counts.tolist(),
+            "expert_usage_fraction": route_fraction.tolist(),
+            "dead_experts_on_eval": int((route_counts == 0).sum().item()),
+            "router_entropy_nats": route_entropy,
             "balance_loss_weight": a.balance_loss_weight,
             "training_objective": "normalized FFN distillation loss plus Switch-style router load balancing",
             "state_dict": {k: v.detach().cpu() for k, v in moe.state_dict().items()},
         }, out)
         log("layer_complete", layer=idx, eval_mse=eval_mse,
             eval_relative_error=eval_relative_error, eval_cosine_similarity=eval_cosine,
-            checkpoint=str(out))
+            dead_experts_on_eval=int((route_counts == 0).sum().item()),
+            router_entropy_nats=route_entropy, checkpoint=str(out))
         del moe, opt, loader, x_train, y_train, x_eval, y_eval, params, eval_pred, eval_preds
         if device.type == "cuda":
             torch.cuda.empty_cache()
