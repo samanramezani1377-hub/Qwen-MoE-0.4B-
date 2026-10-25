@@ -176,11 +176,11 @@ def main():
     p.add_argument("--model", default=MODEL_ID)
     p.add_argument("--layer", type=int, default=0)
     p.add_argument("--samples", type=int, default=256)
-    p.add_argument("--max-length", type=int, default=128)
+    p.add_argument("--max-length", type=int, default=256)
     p.add_argument("--num-experts", type=int, default=32)
     p.add_argument("--top-k", type=int, default=2)
-    p.add_argument("--epochs", type=int, default=3)
-    p.add_argument("--batch-size", type=int, default=8)
+    p.add_argument("--epochs", type=int, default=10)
+    p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-4)
     p.add_argument("--balance-loss-weight", type=float, default=0.01,
                    help="Weight for Switch-style router load-balancing auxiliary loss")
@@ -310,7 +310,7 @@ def main():
                      train_objective=round(losses[-1], 8), steps_per_second=round(steps_per_second, 3),
                      eta_seconds=round((total_steps - train_step) / steps_per_second, 1))
         epoch_mse = sum(losses) / max(1, len(losses))
-        progress("epoch_complete", epoch=epoch + 1, train_mse=epoch_mse)
+        progress("epoch_complete", epoch=epoch + 1, train_objective=epoch_mse)
     moe.eval(); eval_losses = []; eval_preds = []
     eval_batches = (len(x_eval) + a.batch_size - 1) // a.batch_size
     with torch.inference_mode():
