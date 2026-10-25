@@ -10,7 +10,7 @@ import argparse, json, math, random
 from pathlib import Path
 from typing import Any
 import torch
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModelForMultimodalLM, AutoTokenizer
 from distill_real_qwen_ffn import get_text_model
 
 def balanced_bisect(features: torch.Tensor, indices: torch.Tensor, seed: int, rounds: int = 8):
@@ -60,7 +60,7 @@ def main():
     if len(texts)<4: raise ValueError("Calibration text needs at least four non-empty documents")
     random.Random(a.seed).shuffle(texts); texts=texts[:a.samples]
     dtype=(torch.bfloat16 if device.type=="cuda" and torch.cuda.is_bf16_supported() else torch.float16) if device.type=="cuda" else torch.bfloat16
-    model=AutoModel.from_pretrained(a.model, torch_dtype=dtype, low_cpu_mem_usage=True).to(device).eval()
+    model=AutoModelForMultimodalLM.from_pretrained(a.model, torch_dtype=dtype, low_cpu_mem_usage=True).to(device).eval()
     revision=getattr(model.config,"_commit_hash",None)
     if not revision: raise RuntimeError("Cannot resolve immutable teacher revision; refusing an unpinned architecture plan")
     tokenizer=AutoTokenizer.from_pretrained(a.model, revision=revision)
