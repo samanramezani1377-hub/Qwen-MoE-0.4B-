@@ -97,15 +97,40 @@ def main() -> int:
     index_path = args.output_dir / "qwen_logits_index.jsonl"
     completed = 0
     skipped = 0
+    # Existing outputs from the earlier extractor may contain top-k values but lack
+    # input_ids/log-normalizers. Reuse only complete, compatible tensors already indexed.
+    indexed_ids: set[str] = set()
+    if index_path.exists():
+        with index_path.open("r", encoding="utf-8") as prior_index:
+            for prior_line in prior_index:
+                if not prior_line.strip():
+                    continue
+                try:
+                    prior_row = json.loads(prior_line)
+                    if prior_row.get("sample_id"):
+                        indexed_ids.add(str(prior_row["sample_id"]))
+                except json.JSONDecodeError:
+                    # An interrupted final index line is ignored; the tensor will be regenerated/indexed.
+                    continue
 
     with index_path.open("a", encoding="utf-8") as index:
         for row in rows:
             sid = row["_sample_id"]
             safe_id = hashlib.sha256(sid.encode("utf-8")).hexdigest()[:24]
             tensor_path = logits_dir / f"{safe_id}.pt"
-            if tensor_path.exists():
-                skipped += 1
-                continue
+            if tensor_path.exists() and sid in indexed_ids:
+                try:
+                    existing = torch.load(tensor_path, map_location="cpu", weights_only=True)
+                    required_keys = {"input_ids", "target_token_ids", "topk_token_ids",
+                                     "topk_logits", "teacher_logsumexp", "temperature"}
+                    compatible = required_keys.issubset(existing) and abs(
+                        float(existing["temperature"]) - args.temperature
+                    ) < 1e-6
+                except Exception:
+                    compatible = False
+                if compatible:
+                    skipped += 1
+                    continue
             prefix_ids = tokenizer.apply_chat_template(
                 [{"role": "user", "content": row["_prompt"]}],
                 tokenize=True,
