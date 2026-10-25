@@ -5,7 +5,7 @@
 ورک‌فلو از `scripts/collect_persian_corpus.py` استفاده می‌کند. منبع اصلی `shekar-ai/Shiraz` (ODC-BY) و منبع جایگزین `ErfanMoosaviMonazzah/mOSCAR-Persian` (CC-BY-4.0) است. دریافت با streaming انجام می‌شود؛ برای هر اجرا ۶۴ سند با حداقل ۱۶۰ نویسه جمع‌آوری و در `data/fa_persian_corpus.manifest.json` منبع، مجوز و شناسه/URL اسناد ثبت می‌شود. هیچ متن ساختگی به‌عنوان جایگزین استفاده نمی‌شود؛ اگر هر دو منبع شکست بخورند، job باید شکست بخورد.
 
 ## چه چیزی اجرا می‌شود؟
-اسکریپت `scripts/distill_real_qwen_ffn.py` مدل مرجع `Qwen/Qwen3.5-2B` را بارگذاری می‌کند، با forward hook ورودی و خروجی واقعی FFN لایهٔ انتخابی را جمع‌آوری می‌کند و سپس ۸ expert کانال‌شاردشده به‌علاوهٔ router را برای بازسازی خروجی teacher با MSE آموزش می‌دهد. ۱۰٪ توکن‌ها برای ارزیابی جدا نگه داشته می‌شوند. padding در loss حذف می‌شود.
+اسکریپت `scripts/distill_real_qwen_ffn.py` مدل مرجع `Qwen/Qwen3.5-2B` را بارگذاری می‌کند، با forward hook ورودی و خروجی واقعی FFN لایهٔ انتخابی را جمع‌آوری می‌کند و سپس به‌طور پیش‌فرض ۳۲ expert کانال‌شاردشده (عرض هر expert برابر ۱۹۲) به‌علاوهٔ router را برای بازسازی خروجی teacher با MSE نرمال‌شده و loss کمکی توازن بار آموزش می‌دهد. ارزیابی بر اساس سندهای کامل جدا می‌شود؛ padding در loss حذف می‌شود. این روش هنوز آزمایش تقطیر یک FFN است، نه تبدیل کامل مدل.
 
 این **تقطیر یک FFN** است، نه تبدیل کل مدل؛ خروجی آن checkpoint آزمایشی است و مستقیم قابل جایگزینی در Qwen نیست. پایین بودن MSE هم به‌تنهایی اثبات حفظ کیفیت زبانی یا استدلال نیست.
 
@@ -19,7 +19,7 @@
 ## اجرای محلی
 ```bash
 python -m pip install torch transformers accelerate safetensors
-python scripts/distill_real_qwen_ffn.py --text-file data/fa_train.txt --layer 0 --samples 256 --max-length 128 --num-experts 8 --top-k 2 --epochs 3 --batch-size 4 --device auto --output artifacts/layer0_top2.pt
+python scripts/distill_real_qwen_ffn.py --text-file data/fa_train.txt --layer 0 --samples 256 --max-length 128 --num-experts 32 --top-k 2 --epochs 10 --batch-size 4 --device auto --output artifacts/layer0_top2.pt
 ```
 
 ## محدودیت‌ها و تفسیر
