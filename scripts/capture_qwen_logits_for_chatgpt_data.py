@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForMultimodalLM, AutoTokenizer
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -84,7 +84,7 @@ def main() -> int:
         model_kwargs["torch_dtype"] = "auto"
     else:
         model_kwargs["torch_dtype"] = torch.float16 if args.device == "cuda" else torch.float32
-    model = AutoModelForCausalLM.from_pretrained(args.model, **model_kwargs)
+    model = AutoModelForMultimodalLM.from_pretrained(args.model, **model_kwargs)
     if args.device != "auto":
         model.to(args.device)
     model.eval()
