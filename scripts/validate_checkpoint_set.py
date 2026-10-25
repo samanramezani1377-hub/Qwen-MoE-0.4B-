@@ -75,7 +75,8 @@ def main() -> int:
     report = {"status": "passed" if not problems and len(found) == a.layers else "failed",
               "checkpoint_dir": str(a.checkpoint_dir), "expected_layers": a.layers,
               "compatible_checkpoint_count": len(found), "num_experts": a.num_experts,
-              "top_k": a.top_k, "model_ids": sorted(model_ids),\n              "teacher_revisions": sorted(teacher_revisions), "problems": problems,
+              "top_k": a.top_k, "model_ids": sorted(model_ids),
+              "teacher_revisions": sorted(teacher_revisions), "problems": problems,
               "note": "Structural validation only; does not prove language quality or full-model compatibility."}
     rendered = json.dumps(report, ensure_ascii=False, indent=2)
     print(rendered)
