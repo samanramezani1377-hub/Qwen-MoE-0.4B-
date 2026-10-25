@@ -1,0 +1,28 @@
+name: MoE FFN prototype test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/moe_ffn_prototype.py"
+      - ".github/workflows/moe-prototype-test.yml"
+  workflow_dispatch:
+
+jobs:
+  cpu-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install CPU-only PyTorch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+
+      - name: Test channel-sharded FFN equivalence and sparse dispatch
+        run: python scripts/moe_ffn_prototype.py
