@@ -23,12 +23,12 @@ def balanced_bisect(features: torch.Tensor, indices: torch.Tensor, seed: int, ro
     c2 = x[d.argmax()].clone()
     for _ in range(rounds):
         axis = c2 - c
-        projection = x @ axis
+        projection = x @ axis.squeeze(0)
         order = torch.argsort(projection)
         left, right = order[:len(order)//2], order[len(order)//2:]
         c = x[left].mean(0, keepdim=True)
         c2 = x[right].mean(0, keepdim=True)
-    order = torch.argsort(x @ (c2-c))
+    order = torch.argsort(x @ (c2-c).squeeze(0))
     half = len(order)//2
     return indices[order[:half]], indices[order[half:]]
 
