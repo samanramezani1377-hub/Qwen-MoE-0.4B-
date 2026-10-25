@@ -43,14 +43,18 @@ def main() -> int:
     p.add_argument("--batch-size", type=int, default=1)
     p.add_argument("--train-batch-size", type=int, default=32)
     p.add_argument("--lr", type=float, default=1e-4)
+    p.add_argument("--balance-loss-weight", type=float, default=0.01)
+    p.add_argument("--eval-fraction", type=float, default=0.1,
+                   help="Fraction of whole documents held out for evaluation")
     p.add_argument("--seed", type=int, default=17)
     p.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     p.add_argument("--start-layer", type=int, default=0)
     p.add_argument("--end-layer", type=int, default=-1, help="-1 means last text-decoder layer")
     p.add_argument("--trust-remote-code", action="store_true")
     a = p.parse_args()
-    if a.epochs < 1 or a.batch_size < 1 or a.train_batch_size < 1:
-        p.error("epochs and batch sizes must be positive")
+    if (a.epochs < 1 or a.batch_size < 1 or a.train_batch_size < 1
+            or not 0.05 <= a.eval_fraction <= 0.5 or a.balance_loss_weight < 0):
+        p.error("epochs/batch sizes must be positive, eval-fraction in [0.05,0.5], and balance-loss-weight nonnegative")
     if not 1 <= a.top_k <= a.num_experts:
         p.error("Require 1 <= top-k <= num-experts")
     if a.device == "cuda" and not torch.cuda.is_available():
@@ -58,8 +62,8 @@ def main() -> int:
     device = torch.device("cuda" if a.device == "cuda" or
                           (a.device == "auto" and torch.cuda.is_available()) else "cpu")
     texts = [s.strip() for s in a.text_file.read_text(encoding="utf-8").splitlines() if s.strip()]
+    random.Random(a.seed).shuffle(texts)
     if a.samples > 0:
-        random.Random(a.seed).shuffle(texts)
         texts = texts[:a.samples]
     if len(texts) < 4:
         p.error(f"Need at least 4 non-empty training samples, got {len(texts)}")
@@ -100,18 +104,27 @@ def main() -> int:
         handle.remove()
         if len(captures) != len(masks) or not captures:
             raise RuntimeError(f"Layer {idx}: failed to capture all batches")
-        xs, ys = [], []
-        for (x, y), mask in zip(captures, masks):
-            valid = mask.reshape(-1)
-            xs.append(x.reshape(-1, x.shape[-1])[valid])
-            ys.append(y.reshape(-1, y.shape[-1])[valid])
-        x_all, y_all = torch.cat(xs), torch.cat(ys)
-        del captures, masks, xs, ys
-        perm = torch.randperm(len(x_all), generator=torch.Generator().manual_seed(a.seed + idx))
-        n_eval = max(1, int(0.1 * len(perm)))
-        eval_ids, train_ids = perm[:n_eval], perm[n_eval:]
-        x_train, y_train = x_all[train_ids], y_all[train_ids]
-        x_eval, y_eval = x_all[eval_ids], y_all[eval_ids]
+        # Keep each document intact so evaluation is held out by document, not token.
+        x_docs, y_docs = [], []
+        for (xb, yb), mask in zip(captures, masks):
+            for row in range(xb.shape[0]):
+                valid = mask[row]
+                if valid.any():
+                    x_docs.append(xb[row][valid])
+                    y_docs.append(yb[row][valid])
+        del captures, masks
+        doc_perm = torch.randperm(len(x_docs), generator=torch.Generator().manual_seed(a.seed + idx))
+        n_eval_docs = max(1, int(a.eval_fraction * len(doc_perm)))
+        eval_doc_ids = doc_perm[:n_eval_docs].tolist()
+        train_doc_ids = doc_perm[n_eval_docs:].tolist()
+        if not train_doc_ids:
+            raise ValueError("Document-level split produced no training documents.")
+        x_train, y_train = torch.cat([x_docs[i] for i in train_doc_ids]), torch.cat([y_docs[i] for i in train_doc_ids])
+        x_eval, y_eval = torch.cat([x_docs[i] for i in eval_doc_ids]), torch.cat([y_docs[i] for i in eval_doc_ids])
+        total_tokens = len(x_train) + len(x_eval)
+        del x_docs, y_docs
+        log("document_split_complete", layer=idx, train_documents=len(train_doc_ids),
+            eval_documents=len(eval_doc_ids), train_tokens=len(x_train), eval_tokens=len(x_eval))
         moe = make_moe_from_ffn(ffn, a.num_experts, a.top_k).to(device)
         params = [q for q in moe.parameters() if q.requires_grad]
         opt = torch.optim.AdamW(params, lr=a.lr)
@@ -122,34 +135,47 @@ def main() -> int:
             for step, (xb, yb) in enumerate(loader, 1):
                 xb, yb = xb.to(device), yb.to(device)
                 opt.zero_grad(set_to_none=True)
-                loss = F.mse_loss(moe(xb).float(), yb.float())
+                pred, balance_loss, _ = moe(xb, return_aux=True)
+                target = yb.float()
+                mse = F.mse_loss(pred.float(), target)
+                relative_mse = mse / target.square().mean().detach().clamp_min(1e-8)
+                loss = relative_mse + a.balance_loss_weight * balance_loss
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(params, 1.0)
                 opt.step()
                 losses.append(float(loss.detach()))
                 if step == 1 or step % 20 == 0 or step == len(loader):
                     log("layer_training_progress", layer=idx, epoch=epoch+1, total_epochs=a.epochs,
-                        step=step, total_steps=len(loader), train_mse=losses[-1])
+                        step=step, total_steps=len(loader), train_objective=losses[-1],
+                        relative_mse=float(relative_mse.detach()), balance_loss=float(balance_loss.detach()))
             log("layer_epoch_complete", layer=idx, epoch=epoch+1,
                 mean_train_mse=sum(losses)/max(1,len(losses)))
         moe.eval()
-        eval_losses = []
+        eval_preds = []
         with torch.inference_mode():
             for start in range(0, len(x_eval), a.train_batch_size):
                 pred = moe(x_eval[start:start+a.train_batch_size].to(device)).float().cpu()
-                eval_losses.append(float(F.mse_loss(pred, y_eval[start:start+a.train_batch_size])))
-        eval_mse = sum(eval_losses)/max(1,len(eval_losses))
+                eval_preds.append(pred)
+        eval_pred = torch.cat(eval_preds)
+        eval_mse = F.mse_loss(eval_pred, y_eval).item()
+        eval_relative_error = (eval_pred-y_eval).norm().item() / y_eval.norm().clamp_min(1e-12).item()
+        eval_cosine = F.cosine_similarity(eval_pred.reshape(1,-1), y_eval.reshape(1,-1)).item()
         out = a.output_dir / f"layer_{idx:02d}_top2_32experts.pt"
         torch.save({
-            "model_id": a.model, "layer": idx, "hidden_size": int(x_all.shape[-1]),
+            "model_id": a.model, "layer": idx, "hidden_size": int(x_train.shape[-1]),
             "num_experts": a.num_experts, "top_k": a.top_k,
-            "tokens_captured": int(len(x_all)), "train_tokens": int(len(train_ids)),
-            "eval_tokens": int(len(eval_ids)), "eval_mse": eval_mse,
-            "training_objective": "match dense teacher FFN outputs on real teacher activations",
+            "tokens_captured": int(total_tokens), "train_tokens": int(len(x_train)),
+            "eval_tokens": int(len(x_eval)), "train_documents": len(train_doc_ids),
+            "eval_documents": len(eval_doc_ids), "eval_mse": eval_mse,
+            "eval_relative_error": eval_relative_error, "eval_cosine_similarity": eval_cosine,
+            "balance_loss_weight": a.balance_loss_weight,
+            "training_objective": "normalized FFN distillation loss plus Switch-style router load balancing",
             "state_dict": {k: v.detach().cpu() for k, v in moe.state_dict().items()},
         }, out)
-        log("layer_complete", layer=idx, eval_mse=eval_mse, checkpoint=str(out))
-        del moe, opt, loader, x_all, y_all, x_train, y_train, x_eval, y_eval, params
+        log("layer_complete", layer=idx, eval_mse=eval_mse,
+            eval_relative_error=eval_relative_error, eval_cosine_similarity=eval_cosine,
+            checkpoint=str(out))
+        del moe, opt, loader, x_train, y_train, x_eval, y_eval, params, eval_pred, eval_preds
         if device.type == "cuda":
             torch.cuda.empty_cache()
     manifest = {
@@ -157,7 +183,8 @@ def main() -> int:
         "model_id": a.model, "device": str(device), "dtype": str(dtype),
         "num_layers_in_teacher": len(layers), "converted_layer_range": [a.start_layer, last_layer],
         "num_experts": a.num_experts, "top_k": a.top_k, "epochs": a.epochs,
-        "training_documents": len(texts), "max_length": a.max_length,
+        "training_documents_including_held_out": len(texts), "eval_fraction": a.eval_fraction,
+        "balance_loss_weight": a.balance_loss_weight, "max_length": a.max_length,
         "checkpoints": [f"layer_{i:02d}_top2_32experts.pt" for i in range(a.start_layer, last_layer+1)],
         "important_limitation": "Per-layer checkpoints only. This script does not yet package a loadable full MoE Transformers model or export Android runtime files.",
     }
