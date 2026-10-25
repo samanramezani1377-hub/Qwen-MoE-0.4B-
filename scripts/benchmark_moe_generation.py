@@ -57,7 +57,7 @@ def main():
             generated_counts.append(max(0,int(output.shape[-1]-inputs["input_ids"].shape[-1])))
     median_total=statistics.median(total_samples)
     generated=statistics.median(generated_counts)
-    report={"status":"benchmark_completed","model":a.model,"device":str(device),"dtype":str(dtype),
+    report={"status":"benchmark_completed","model":a.model,"teacher_revision":revision,"device":str(device),"dtype":str(dtype),
             "prompt_tokens":int(inputs["input_ids"].shape[-1]),"requested_new_tokens":a.new_tokens,
             "actual_generated_tokens_median":generated,"repeats":a.repeats,"warmup":a.warmup,
             "prefill_plus_first_token_ms_median":round(statistics.median(prefill_samples)*1000,2),
