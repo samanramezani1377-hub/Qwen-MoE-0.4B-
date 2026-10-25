@@ -10,7 +10,7 @@
 
 - [Notebook آموزش همهٔ FFNها در Colab](notebooks/03_colab_full_layer_distillation.ipynb)
 - [اسکریپت تقطیر یک FFN](scripts/distill_real_qwen_ffn.py)
-- [اسکریپت تقطیر همهٔ FFNها](scripts/distill_all_qwen_ffn_layers.py)\n- [اعتبارسنجی checkpointهای ۲۴ لایه](scripts/validate_checkpoint_set.py)\n- [Runtime آزمایشی برای جایگزینی FFNها](scripts/moe_runtime.py)\n- [ارزیابی سرتاسری معلم در برابر MoE](scripts/evaluate_full_model.py)
+- [اسکریپت تقطیر همهٔ FFNها](scripts/distill_all_qwen_ffn_layers.py)\n- [اعتبارسنجی checkpointهای ۲۴ لایه](scripts/validate_checkpoint_set.py)\n- [Runtime آزمایشی برای جایگزینی FFNها](scripts/moe_runtime.py)\n- [ارزیابی سرتاسری معلم در برابر MoE](scripts/evaluate_full_model.py)\n- [تولید متن با overlay آزمایشی](scripts/load_moe_model.py)\n- [بسته‌بندی checkpointها با hash و manifest](scripts/package_moe_adapter.py)
 
 ## معماری آزمایشی فعلی
 
