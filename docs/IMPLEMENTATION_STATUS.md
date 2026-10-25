@@ -28,5 +28,6 @@
 ```bash
 python scripts/validate_checkpoint_set.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --layers 24 --num-experts 32 --top-k 2
 python scripts/evaluate_full_model.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --text-file /content/drive/MyDrive/qwen-moe-full-build/fa_eval.txt --output /content/full_model_eval.json --device auto
-python scripts/package_moe_adapter.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --output-dir /content/qwen-moe-overlay --model Qwen/Qwen3.5-2B --layers 24 --num-experts 32 --top-k 2\npython scripts/benchmark_moe_generation.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --new-tokens 64 --repeats 3 --num-experts 32 --top-k 2 --device auto
+python scripts/package_moe_adapter.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --output-dir /content/qwen-moe-overlay --model Qwen/Qwen3.5-2B --layers 24 --num-experts 32 --top-k 2
+python scripts/benchmark_moe_generation.py --checkpoint-dir /content/drive/MyDrive/qwen-moe-full-build/checkpoints_v2 --new-tokens 64 --repeats 3 --num-experts 32 --top-k 2 --device auto
 ```
