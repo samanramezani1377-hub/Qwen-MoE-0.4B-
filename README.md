@@ -96,5 +96,6 @@
 
 - [گزارش وضعیت و بنچمارک Tesla T4 (2026-10-26)](docs/checkpoints/2026-10-26-benchmark-and-state.md)
 - [نتایج بنچمارک به‌صورت JSON](docs/checkpoints/2026-10-26-benchmark-results.json)
+- [Google Drive snapshot pointer (2026-10-26)](docs/checkpoints/2026-10-26-drive-snapshot-pointer.md)
 
 این فایل‌ها وضعیت آزمایش را ثبت می‌کنند؛ وزن‌ها و checkpointهای حجیم همچنان در Google Drive نگه‌داری می‌شوند و آموزش اصلی هنوز اجرا نشده است.
