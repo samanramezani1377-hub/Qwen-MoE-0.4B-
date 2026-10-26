@@ -1,0 +1,65 @@
+{
+  "snapshot_date": "2026-10-26",
+  "repository": "samanramezani1377-hub/Qwen-MoE-0.4B-",
+  "branch": "main",
+  "base_model": "Qwen/Qwen3.5-2B",
+  "teacher_revision": "15852e8c16360a2fea060d615a32b45270f8a8fc",
+  "gpu": "Tesla T4",
+  "sample_id": "fa-kd-20261025-000243",
+  "prompt_tokens": 28,
+  "max_new_tokens": 32,
+  "training_enabled": false,
+  "checkpoint_saved_during_benchmark": false,
+  "rounds": 3,
+  "results": [
+    {
+      "key": "base",
+      "model": "Qwen3.5-2B base",
+      "mean_tokens_per_second": 19.2264,
+      "median_tokens_per_second": 19.3629,
+      "stdev_tokens_per_second": 0.4574,
+      "mean_generation_seconds": 1.665,
+      "max_peak_cuda_memory_GiB": 8.63
+    },
+    {
+      "key": "current",
+      "model": "Current MoE",
+      "mean_tokens_per_second": 8.5195,
+      "median_tokens_per_second": 8.5378,
+      "stdev_tokens_per_second": 0.0811,
+      "mean_generation_seconds": 3.7563,
+      "max_peak_cuda_memory_GiB": 8.635,
+      "relative_speed_ratio": 0.443,
+      "relative_change_percent": -55.69
+    },
+    {
+      "key": "optimized_v2",
+      "model": "Experimental optimized MoE",
+      "mean_tokens_per_second": 12.474,
+      "median_tokens_per_second": 12.3565,
+      "stdev_tokens_per_second": 0.2283,
+      "mean_generation_seconds": 2.5659,
+      "max_peak_cuda_memory_GiB": 8.635,
+      "relative_speed_ratio": 0.649,
+      "relative_change_percent": -35.12
+    }
+  ],
+  "drive_paths": {
+    "project_root": "/content/drive/MyDrive/qwen-moe-chatgpt-logits",
+    "current_runtime": "recovery_scripts/moe_runtime.py",
+    "optimized_runtime": "recovery_scripts/moe_runtime_optimized_v2.py",
+    "initialized_checkpoints": "analysis_initialized_checkpoints_v2",
+    "logits_index": "qwen_logits_output_v2/qwen_logits_index.jsonl",
+    "sample_logits": "qwen_logits_output_v2/qwen_topk_logits/4ecbeaa5fc7676c91bc16d5c.pt"
+  },
+  "optimized_runtime_sha256_recorded": "0d626ee1083c47e24856b46268cf9512517f66ef8804326092278fd9618a0192",
+  "status": "initialized_not_trained",
+  "next_steps": [
+    "Create Drive status snapshot and file hash manifest",
+    "Verify all 24 initialized layer checkpoints and runtime hashes",
+    "Compare full-model outputs and gradients between current and optimized runtime",
+    "Profile router, dispatch and expert compute",
+    "Do not start full training until correctness and speed are reviewed"
+  ],
+  "note": "This records inference benchmarks, not answer quality or successful training. Large checkpoint and logits binaries stay in Google Drive and are not committed to GitHub."
+}
