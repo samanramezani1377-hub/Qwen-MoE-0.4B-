@@ -2,7 +2,7 @@
   "kernel_id": "samanramezani/qwen-moe-combined-text-qwen-kd",
   "kernel_state": "FAILED",
   "kaggle_status": "samanramezani/qwen-moe-combined-text-qwen-kd has status \"KernelWorkerStatus.ERROR\"",
-  "sync_timestamp_utc": "2026-10-31T08:55:49.327703+00:00",
+  "sync_timestamp_utc": "2026-10-31T15:15:14.501671+00:00",
   "note": "GitHub stores compact metrics and evaluation only, not model checkpoint weights. No qwen_moe_results.json was found in downloaded output; check the Kaggle notebook logs and output download step.",
   "training_results_available": false
 }
